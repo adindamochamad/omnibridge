@@ -1,6 +1,7 @@
 import { Store } from '@tauri-apps/plugin-store';
 import { invoke } from '@tauri-apps/api/core';
 import { urlEfektifUntukWebhook } from './cas-scale.js';
+import { konfigurasiWebhookCasDefault } from './konfigurasi-default-cas.js';
 
 const STORE_FILE = 'omnibridge.webhooks.json';
 const KEY_CONFIGS = 'configs';
@@ -55,20 +56,7 @@ export interface WebhookPayload {
 }
 
 export function defaultConfig(): WebhookConfig {
-  return {
-    enabled: false,
-    url: '',
-    method: 'POST',
-    throttle_ms: 1000,
-    include_raw: false,
-    custom_headers: '',
-    body_format: 'json',
-    form_template: '',
-    scales_code: 'S100',
-    company_id: '2',
-    entis: false,
-    mode_webhook: 'DEV',
-  };
+  return konfigurasiWebhookCasDefault();
 }
 
 /** Template form standar untuk integrasi timbangan legacy. */
@@ -107,7 +95,13 @@ export async function getConfig(fingerprint: string): Promise<WebhookConfig | nu
   if (!stored) return null;
   // Merge defaults so configs saved before body_format/form_template existed
   // still load with sane values instead of undefined.
-  const merged = { ...defaultConfig(), ...stored };
+  const dasar = konfigurasiWebhookCasDefault();
+  const merged = { ...dasar, ...stored };
+  // Isi ulang field kosong dari konfigurasi bawaan (store lama bisa punya string '')
+  if (!merged.url?.trim()) merged.url = dasar.url;
+  if (!merged.custom_headers?.trim()) merged.custom_headers = dasar.custom_headers;
+  if (!merged.form_template?.trim()) merged.form_template = dasar.form_template;
+  if (!merged.body_format) merged.body_format = dasar.body_format;
   // ENTIS = saklar auto-forward; selaraskan dengan enabled
   if (stored.entis === undefined && stored.enabled) {
     merged.entis = true;

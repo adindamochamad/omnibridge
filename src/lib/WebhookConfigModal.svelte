@@ -10,7 +10,8 @@
     type WebhookStats,
   } from '$lib/webhook.js';
   import { formatTimestamp } from '$lib/types.js';
-  import { urlEfektifUntukWebhook, URL_WEBHOOK_ONLINE } from '$lib/cas-scale.js';
+  import { urlEfektifUntukWebhook } from '$lib/cas-scale.js';
+  import { URL_WEBHOOK_DEV, URL_WEBHOOK_ONLINE } from '$lib/konfigurasi-default-cas.js';
 
   let {
     config,
@@ -121,9 +122,9 @@
         <label for="wh-url">
           Webhook URL
           {#if (draft.mode_webhook ?? 'DEV') === 'ONLINE'}
-            <span class="hint">(mode ONLINE — kirim ke {URL_WEBHOOK_ONLINE})</span>
+            <span class="hint">(ONLINE → {URL_WEBHOOK_ONLINE})</span>
           {:else}
-            <span class="hint">(mode DEV — URL di bawah dipakai saat kirim)</span>
+            <span class="hint">(DEV → {URL_WEBHOOK_DEV})</span>
           {/if}
         </label>
         <input
@@ -131,11 +132,7 @@
           type="url"
           placeholder="https://dev.bat.entis.app/api/scale"
           bind:value={draft.url}
-          disabled={(draft.mode_webhook ?? 'DEV') === 'ONLINE'}
         />
-        {#if (draft.mode_webhook ?? 'DEV') === 'ONLINE'}
-          <span class="hint">Ganti ke mode DEV di card port untuk mengubah URL staging.</span>
-        {/if}
       </div>
 
       <!-- Method + Throttle -->

@@ -52,11 +52,11 @@
   },
   "webhook": {
     "enabled": false,
-    "url": "",
+    "url": "https://dev.bat.entis.app/api/scale",
     "method": "POST",
     "throttle_ms": 1000,
     "include_raw": false,
-    "custom_headers": "",
+    "custom_headers": "gs-key: 8g0kc4skc0gc40kkgcskw40kgg0k84ssgcs4ss4w",
     "body_format": "form",
     "form_template": "scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}",
     "scales_code": "S100",

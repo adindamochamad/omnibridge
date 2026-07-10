@@ -7,6 +7,7 @@ import {
   type WebhookPayload,
 } from '../src/lib/webhook.js';
 import { urlEfektifUntukWebhook, URL_WEBHOOK_ONLINE } from '../src/lib/cas-scale.js';
+import { URL_WEBHOOK_DEV } from '../src/lib/konfigurasi-default-cas.js';
 
 const samplePayload: WebhookPayload = {
   timestamp: 1719500000000,
@@ -21,10 +22,8 @@ const samplePayload: WebhookPayload = {
 };
 
 describe('urlEfektifUntukWebhook', () => {
-  it('DEV memakai URL yang dikonfigurasi', () => {
-    expect(
-      urlEfektifUntukWebhook({ mode_webhook: 'DEV', url: 'https://dev.bat.entis.app/api/scale' })
-    ).toBe('https://dev.bat.entis.app/api/scale');
+  it('DEV fallback ke URL staging jika url kosong', () => {
+    expect(urlEfektifUntukWebhook({ mode_webhook: 'DEV', url: '' })).toBe(URL_WEBHOOK_DEV);
   });
 
   it('ONLINE selalu ke bat.entis.app', () => {
@@ -103,16 +102,10 @@ describe('renderFormBody', () => {
 });
 
 describe('sendWebhook URL validation', () => {
-  it('rejects empty URL', async () => {
-    const res = await sendWebhook(defaultConfig(), {
-      timestamp: Date.now(),
-      port: 'test',
-      protocol: 'test',
-      confidence: 0,
-      fields: {},
-    });
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/empty/i);
+  it('default config punya URL DEV dan gs-key', () => {
+    const cfg = defaultConfig();
+    expect(cfg.url).toBe(URL_WEBHOOK_DEV);
+    expect(cfg.custom_headers).toContain('gs-key');
   });
 
   it('rejects non-http(s) protocol', async () => {

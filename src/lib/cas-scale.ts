@@ -1,6 +1,9 @@
 import type { DiscoveredDevice } from './types.js';
 import type { DeviceProfile } from './profiles.js';
 import type { WebhookConfig } from './webhook.js';
+import { URL_WEBHOOK_DEV, URL_WEBHOOK_ONLINE } from './konfigurasi-default-cas.js';
+
+export { URL_WEBHOOK_DEV, URL_WEBHOOK_ONLINE };
 
 /** Baud pertama untuk "membangunkan" timbangan CAS sebelum operasi normal. */
 export const BAUD_WARMUP_CAS = 19200;
@@ -22,17 +25,15 @@ export type ModeWebhook = 'DEV' | 'ONLINE';
 
 export const OPSI_MODE_WEBHOOK: ModeWebhook[] = ['DEV', 'ONLINE'];
 
-/** Endpoint production ENTIS — dipakai otomatis saat mode ONLINE. */
-export const URL_WEBHOOK_ONLINE = 'https://bat.entis.app/api/scale';
-
-/** URL efektif saat kirim: DEV = url di pengaturan webhook, ONLINE = bat.entis.app. */
+/** URL efektif saat kirim: DEV = staging, ONLINE = production. */
 export function urlEfektifUntukWebhook(
   config: Pick<WebhookConfig, 'mode_webhook' | 'url'>
 ): string {
   if (config.mode_webhook === 'ONLINE') {
     return URL_WEBHOOK_ONLINE;
   }
-  return config.url?.trim() ?? '';
+  const urlDev = config.url?.trim();
+  return urlDev || URL_WEBHOOK_DEV;
 }
 
 /** Port yang sudah di-warmup di sesi ini — hindari ulang tiap stop/start. */

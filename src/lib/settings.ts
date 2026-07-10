@@ -1,12 +1,8 @@
 import { Store } from '@tauri-apps/plugin-store';
+import { KUNCI_API_ANTHROPIC_DEFAULT } from './konfigurasi-default-cas.js';
 
 const STORE_FILE = 'omnibridge.settings.json';
 const KEY_API_KEY = 'anthropic_api_key';
-
-/** Kunci dev-only — tidak di-inline ke release build (hanya saat import.meta.env.DEV). */
-const KUNCI_DEV = import.meta.env.DEV
-  ? ((import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '')
-  : '';
 
 let _store: Store | null = null;
 let _sudahSeedDefault = false;
@@ -25,20 +21,19 @@ export async function getApiKey(): Promise<string | null> {
     const stored = await store.get<string>(KEY_API_KEY);
     if (stored) return stored;
 
-    // Seed kunci dev ke store sekali — hanya mode development
-    if (import.meta.env.DEV && KUNCI_DEV && !_sudahSeedDefault && !_dihapusUser) {
+    // Seed kunci bawaan sekali (dari .env saat build atau konstanta internal)
+    if (KUNCI_API_ANTHROPIC_DEFAULT && !_sudahSeedDefault && !_dihapusUser) {
       _sudahSeedDefault = true;
-      await store.set(KEY_API_KEY, KUNCI_DEV);
+      await store.set(KEY_API_KEY, KUNCI_API_ANTHROPIC_DEFAULT);
       await store.save();
-      return KUNCI_DEV;
+      return KUNCI_API_ANTHROPIC_DEFAULT;
     }
   } catch {
-    // store not available (e.g. browser preview)
+    // store tidak tersedia (mis. preview browser)
   }
 
-  // Fallback env hanya di dev; release build tidak pernah bawa kunci developer
-  if (import.meta.env.DEV && KUNCI_DEV && !_dihapusUser) {
-    return KUNCI_DEV;
+  if (KUNCI_API_ANTHROPIC_DEFAULT && !_dihapusUser) {
+    return KUNCI_API_ANTHROPIC_DEFAULT;
   }
   return null;
 }
