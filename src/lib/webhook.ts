@@ -1,5 +1,6 @@
 import { Store } from '@tauri-apps/plugin-store';
 import { invoke } from '@tauri-apps/api/core';
+import { urlEfektifUntukWebhook } from './cas-scale.js';
 
 const STORE_FILE = 'omnibridge.webhooks.json';
 const KEY_CONFIGS = 'configs';
@@ -28,6 +29,8 @@ export interface WebhookConfig {
   company_id: string;
   /** Centang ENTIS = auto-forward webhook aktif; juga dikirim sebagai entis=1/0 di form body. */
   entis: boolean;
+  /** Mode endpoint: DEV (staging) atau ONLINE (production). */
+  mode_webhook: 'DEV' | 'ONLINE';
 }
 
 export interface WebhookStats {
@@ -64,6 +67,7 @@ export function defaultConfig(): WebhookConfig {
     scales_code: 'S100',
     company_id: '2',
     entis: false,
+    mode_webhook: 'DEV',
   };
 }
 
@@ -203,10 +207,17 @@ export async function sendWebhook(
   config: WebhookConfig,
   payload: WebhookPayload
 ): Promise<SendResult> {
-  if (!config.url) return { ok: false, status: null, error: 'URL is empty' };
+  const urlKirim = urlEfektifUntukWebhook(config);
+  if (!urlKirim) {
+    return {
+      ok: false,
+      status: null,
+      error: config.mode_webhook === 'ONLINE' ? 'URL production kosong' : 'URL is empty',
+    };
+  }
 
   try {
-    const url = new URL(config.url);
+    const url = new URL(urlKirim);
     if (!['http:', 'https:'].includes(url.protocol)) {
       return { ok: false, status: null, error: 'URL must be http:// or https://' };
     }
@@ -237,7 +248,7 @@ export async function sendWebhook(
   // Access-Control-* headers fails preflight as "TypeError: Failed to fetch".
   try {
     const res = await invoke<TauriWebhookResponse>('send_webhook_request', {
-      url: config.url,
+      url: urlKirim,
       method: config.method,
       headers,
       body,

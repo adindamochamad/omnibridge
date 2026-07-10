@@ -126,7 +126,7 @@
       baru.entis = Boolean(patch.enabled);
     }
 
-    if ("scales_code" in patch || "company_id" in patch) {
+    if ("scales_code" in patch || "company_id" in patch || "mode_webhook" in patch) {
       baru.form_template = templateFormTimbangan();
       baru.body_format = "form";
     }

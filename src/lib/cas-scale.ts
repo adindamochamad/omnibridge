@@ -1,5 +1,6 @@
 import type { DiscoveredDevice } from './types.js';
 import type { DeviceProfile } from './profiles.js';
+import type { WebhookConfig } from './webhook.js';
 
 /** Baud pertama untuk "membangunkan" timbangan CAS sebelum operasi normal. */
 export const BAUD_WARMUP_CAS = 19200;
@@ -15,6 +16,24 @@ export const OPSI_KODE_TIMBANGAN = ['S100', 'S101', 'S102', 'S200', 'S300'] as c
 
 /** Opsi company-id untuk webhook legacy. */
 export const OPSI_COMPANY_ID = ['1', '2', '3', '4', '5'] as const;
+
+/** Mode endpoint webhook: staging vs production. */
+export type ModeWebhook = 'DEV' | 'ONLINE';
+
+export const OPSI_MODE_WEBHOOK: ModeWebhook[] = ['DEV', 'ONLINE'];
+
+/** Endpoint production ENTIS — dipakai otomatis saat mode ONLINE. */
+export const URL_WEBHOOK_ONLINE = 'https://bat.entis.app/api/scale';
+
+/** URL efektif saat kirim: DEV = url di pengaturan webhook, ONLINE = bat.entis.app. */
+export function urlEfektifUntukWebhook(
+  config: Pick<WebhookConfig, 'mode_webhook' | 'url'>
+): string {
+  if (config.mode_webhook === 'ONLINE') {
+    return URL_WEBHOOK_ONLINE;
+  }
+  return config.url?.trim() ?? '';
+}
 
 /** Port yang sudah di-warmup di sesi ini — hindari ulang tiap stop/start. */
 const portSudahWarmup = new Set<string>();

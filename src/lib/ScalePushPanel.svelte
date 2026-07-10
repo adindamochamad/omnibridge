@@ -7,6 +7,7 @@
     type WebhookPayload,
     type WebhookStats,
   } from '$lib/webhook.js';
+  import { urlEfektifUntukWebhook } from '$lib/cas-scale.js';
 
   let {
     config,
@@ -27,6 +28,8 @@
     payload?.fields.weight ? String(payload.fields.weight.value) : null
   );
 
+  const urlAktif = $derived(urlEfektifUntukWebhook(config));
+
   const previewBody = $derived.by(() => {
     if (!payload) return '';
     const template = config.form_template?.trim() || templateFormTimbangan();
@@ -34,8 +37,14 @@
   });
 
   async function kirimSekarang() {
-    if (!payload || !config.url) {
-      pesanHasil = { ok: false, teks: 'Isi URL webhook dulu di pengaturan 🔗' };
+    if (!payload || !urlAktif) {
+      pesanHasil = {
+        ok: false,
+        teks:
+          config.mode_webhook === 'ONLINE'
+            ? 'URL production tidak tersedia'
+            : 'Isi URL webhook dulu di pengaturan 🔗',
+      };
       return;
     }
     if (!beratSaatIni) {
@@ -74,7 +83,7 @@
     <span class="ikon">⚖️</span>
     <span class="judul">Kirim Berat ke Server</span>
     <span class="badge-konfig">
-      {config.scales_code} · co.{config.company_id}{config.entis ? ' · ENTIS' : ''}
+      {config.mode_webhook ?? 'DEV'} · {config.scales_code} · co.{config.company_id}{config.entis ? ' · ENTIS' : ''}
     </span>
     {#if config.entis}
       <span class="badge-auto">Auto-kirim {config.throttle_ms}ms</span>
@@ -107,13 +116,16 @@
     <div class="hasil" class:gagal={!pesanHasil.ok}>{pesanHasil.teks}</div>
   {/if}
 
-  {#if payload && config.url}
+  {#if payload && urlAktif}
     <details class="preview">
-      <summary>Preview body</summary>
+      <summary>Preview body → {urlAktif}</summary>
       <code>{previewBody}</code>
     </details>
-  {:else if !config.url}
-    <div class="petunjuk">Atur URL di tombol <strong>🔗 Webhook</strong> di atas.</div>
+  {:else if !urlAktif}
+    <div class="petunjuk">
+      Mode <strong>DEV</strong>: atur URL di tombol <strong>🔗 Webhook</strong>.
+      Mode <strong>ONLINE</strong> otomatis ke bat.entis.app.
+    </div>
   {/if}
 </div>
 

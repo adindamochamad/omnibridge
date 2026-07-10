@@ -61,6 +61,7 @@
     "form_template": "scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}",
     "scales_code": "S100",
     "company_id": "2",
-    "entis": false
+    "entis": false,
+    "mode_webhook": "DEV"
   }
 }

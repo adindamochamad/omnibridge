@@ -6,7 +6,9 @@
   import {
     OPSI_KODE_TIMBANGAN,
     OPSI_COMPANY_ID,
+    OPSI_MODE_WEBHOOK,
     apakahPerangkatCas,
+    type ModeWebhook,
   } from "$lib/cas-scale.js";
   import type { WebhookConfig } from "$lib/webhook.js";
 
@@ -54,6 +56,12 @@
   function handleCompanyId(e: Event) {
     onWebhookConfigChange?.({
       company_id: (e.target as HTMLSelectElement).value,
+    });
+  }
+
+  function handleModeWebhook(e: Event) {
+    onWebhookConfigChange?.({
+      mode_webhook: (e.target as HTMLSelectElement).value as ModeWebhook,
     });
   }
 
@@ -237,6 +245,20 @@
         >
           {#each OPSI_COMPANY_ID as id}
             <option value={id}>{id}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="scale-field">
+        <span class="scale-label">Mode</span>
+        <select
+          class="scale-select"
+          class:mode-dev={webhookConfig.mode_webhook === 'DEV'}
+          class:mode-online={webhookConfig.mode_webhook === 'ONLINE'}
+          value={webhookConfig.mode_webhook ?? 'DEV'}
+          onchange={handleModeWebhook}
+        >
+          {#each OPSI_MODE_WEBHOOK as mode}
+            <option value={mode}>{mode}</option>
           {/each}
         </select>
       </div>
@@ -466,9 +488,19 @@
 
   .scale-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0.4rem;
     margin-top: 0.45rem;
+  }
+
+  .scale-select.mode-dev {
+    color: #fbbf24;
+    border-color: #854d0e44;
+  }
+
+  .scale-select.mode-online {
+    color: #86efac;
+    border-color: #1e402844;
   }
 
   .scale-field {

@@ -10,6 +10,7 @@
     type WebhookStats,
   } from '$lib/webhook.js';
   import { formatTimestamp } from '$lib/types.js';
+  import { urlEfektifUntukWebhook, URL_WEBHOOK_ONLINE } from '$lib/cas-scale.js';
 
   let {
     config,
@@ -32,6 +33,7 @@
   let testResult = $state<{ ok: boolean; message: string } | null>(null);
   let saving = $state(false);
   let showPayload = $state(false);
+  const urlAktif = $derived(urlEfektifUntukWebhook(draft));
 
   async function handleSave() {
     saving = true;
@@ -116,13 +118,24 @@
 
       <!-- URL -->
       <div class="field">
-        <label for="wh-url">Webhook URL</label>
+        <label for="wh-url">
+          Webhook URL
+          {#if (draft.mode_webhook ?? 'DEV') === 'ONLINE'}
+            <span class="hint">(mode ONLINE — kirim ke {URL_WEBHOOK_ONLINE})</span>
+          {:else}
+            <span class="hint">(mode DEV — URL di bawah dipakai saat kirim)</span>
+          {/if}
+        </label>
         <input
           id="wh-url"
           type="url"
-          placeholder="https://hooks.zapier.com/..."
+          placeholder="https://dev.bat.entis.app/api/scale"
           bind:value={draft.url}
+          disabled={(draft.mode_webhook ?? 'DEV') === 'ONLINE'}
         />
+        {#if (draft.mode_webhook ?? 'DEV') === 'ONLINE'}
+          <span class="hint">Ganti ke mode DEV di card port untuk mengubah URL staging.</span>
+        {/if}
       </div>
 
       <!-- Method + Throttle -->
@@ -163,7 +176,8 @@
           <span class="hint">
             Kode Timbangan, Company ID, dan <strong>ENTIS</strong> diatur di card port sidebar.
             Centang ENTIS = auto-forward aktif.
-            Saat ini: <code>{draft.scales_code}</code> · company <code>{draft.company_id}</code>
+            Saat ini: mode <code>{draft.mode_webhook ?? 'DEV'}</code>
+            · <code>{draft.scales_code}</code> · company <code>{draft.company_id}</code>
             · ENTIS <code>{draft.entis ? '1 (auto-kirim)' : '0'}</code>
           </span>
         </div>
@@ -250,7 +264,7 @@
     </div>
 
     <footer class="modal-footer">
-      <button class="btn secondary" onclick={handleTest} disabled={testing || !draft.url}>
+      <button class="btn secondary" onclick={handleTest} disabled={testing || !urlAktif}>
         {testing ? 'Testing…' : 'Test'}
       </button>
       <div class="spacer"></div>

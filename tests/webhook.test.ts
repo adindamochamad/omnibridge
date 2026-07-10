@@ -6,6 +6,7 @@ import {
   renderFormBody,
   type WebhookPayload,
 } from '../src/lib/webhook.js';
+import { urlEfektifUntukWebhook, URL_WEBHOOK_ONLINE } from '../src/lib/cas-scale.js';
 
 const samplePayload: WebhookPayload = {
   timestamp: 1719500000000,
@@ -18,6 +19,20 @@ const samplePayload: WebhookPayload = {
     stable: { value: 'ST', updated_at: 1719500000000 },
   },
 };
+
+describe('urlEfektifUntukWebhook', () => {
+  it('DEV memakai URL yang dikonfigurasi', () => {
+    expect(
+      urlEfektifUntukWebhook({ mode_webhook: 'DEV', url: 'https://dev.bat.entis.app/api/scale' })
+    ).toBe('https://dev.bat.entis.app/api/scale');
+  });
+
+  it('ONLINE selalu ke bat.entis.app', () => {
+    expect(
+      urlEfektifUntukWebhook({ mode_webhook: 'ONLINE', url: 'https://dev.bat.entis.app/api/scale' })
+    ).toBe(URL_WEBHOOK_ONLINE);
+  });
+});
 
 describe('parseHeaders', () => {
   it('parses simple Key: Value pairs', () => {
