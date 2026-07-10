@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getApiKey, setApiKey, clearApiKey } from '$lib/settings.js';
   import { getAllProfiles, clearAllProfiles } from '$lib/profiles.js';
+  import versiPkg from '../../package.json';
   import Anthropic from '@anthropic-ai/sdk';
 
   let { onClose }: { onClose: () => void } = $props();
@@ -266,7 +267,7 @@
           <div class="about-name">OmniBridge</div>
           <div class="about-tagline">Intelligent Serial Gateway · AI-powered protocol detection</div>
           <div class="about-meta">
-            <span>v0.1.0</span>
+            <span>v{versiPkg.version}</span>
             <span>·</span>
             <span>Tauri 2 + Svelte 5</span>
             <span>·</span>

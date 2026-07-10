@@ -38,6 +38,23 @@ export function urlEfektifUntukWebhook(
 /** Port yang sudah di-warmup di sesi ini — hindari ulang tiap stop/start. */
 const portSudahWarmup = new Set<string>();
 
+/** VID WCH — adaptor USB-serial yang umum dipakai timbangan CAS (CH340/CH341). */
+const VID_CH340 = 0x1a86;
+
+/** Cek apakah port ini adaptor CH340 — timbangan CAS di lapangan biasanya lewat chip ini. */
+export function apakahAdaptorCh340(device: DiscoveredDevice): boolean {
+  if (device.device_class === 'ch340') return true;
+  if (device.vid === VID_CH340) return true;
+  const manuf = (device.manufacturer ?? '').toLowerCase();
+  const produk = (device.product ?? '').toLowerCase();
+  return (
+    manuf.includes('wch') ||
+    produk.includes('ch340') ||
+    produk.includes('ch341') ||
+    produk.includes('usb-serial')
+  );
+}
+
 export function apakahPerangkatCas(
   device: DiscoveredDevice,
   profil?: DeviceProfile | null
@@ -55,6 +72,9 @@ export function apakahPerangkatCas(
 
   // Produk seri CL (CL5000, CL-5000, dll.) — pola khas timbangan CAS
   if (/\bcl[\s-]?\d/.test(produk)) return true;
+
+  // Adaptor CH340 — hampir semua setup CAS di Indonesia pakai ini
+  if (apakahAdaptorCh340(device)) return true;
 
   // Sudah teridentifikasi sebagai protokol CAS dari profil/learned
   if (protokol.includes('cas scale') || protokol.includes('cas ')) return true;

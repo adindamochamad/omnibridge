@@ -1,4 +1,5 @@
 import casScalePreset from '../../presets/cas-scale.json';
+import { apakahAdaptorCh340 } from './cas-scale.js';
 import { getAllProfiles, type DeviceProfile } from './profiles.js';
 import { saveConfig, getConfig, defaultConfig, type WebhookConfig } from './webhook.js';
 import { deviceFingerprint, type DiscoveredDevice } from './types.js';
@@ -40,7 +41,7 @@ function cocokPreset(device: DiscoveredDevice, preset: PresetBundled): boolean {
   );
 
   // Hanya match eksplisit — hindari false positive dari kata "scale" generik
-  return !!(cocokManuf || cocokProduk);
+  return !!(cocokManuf || cocokProduk || apakahAdaptorCh340(device));
 }
 
 /** Terapkan preset bawaan ke store lokal jika belum ada profil untuk device ini. */

@@ -23,6 +23,7 @@
     isDemoPort,
   } from "$lib/demo.js";
   import { terapkanSemuaPresetBundled } from "$lib/bundled-presets.js";
+  import versiPkg from "../../package.json";
   import {
     BAUD_OPERASI_CAS,
     BAUD_WARMUP_CAS,
@@ -360,7 +361,7 @@
         <div class="logo-icon">⬡</div>
         <div class="logo-text">
           <div class="app-name">OmniBridge</div>
-          <div class="app-sub">Serial Gateway</div>
+          <div class="app-sub">CAS Scale Bridge · v{versiPkg.version}</div>
         </div>
         <button class="header-icon-btn" onclick={() => (showSettings = true)} title="Settings">
           ⚙

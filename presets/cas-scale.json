@@ -4,7 +4,7 @@
   "description": "Preset bawaan untuk timbangan CAS — protokol ASCII ST/US + berat kg. Dibagikan lewat repo agar pengguna lain langsung dapat profil siap pakai.",
   "match": {
     "manufacturer_contains": ["CAS"],
-    "product_contains": ["CL", "CL5000", "cl5000"]
+    "product_contains": ["CL", "CL5000", "cl5000", "CH340", "CH341"]
   },
   "profile": {
     "protocol": "CAS Scale ASCII",
