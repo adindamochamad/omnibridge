@@ -3,6 +3,7 @@
   import { formatTimestamp, type DataLine } from '$lib/types.js';
   import AnalysisPanel from '$lib/AnalysisPanel.svelte';
   import StructuredDashboard from '$lib/StructuredDashboard.svelte';
+  import ScalePushPanel from '$lib/ScalePushPanel.svelte';
   import WebhookConfigModal from '$lib/WebhookConfigModal.svelte';
   import {
     analyzeStream,
@@ -22,7 +23,6 @@
   import { compileFields, parseStream, latest } from '$lib/parser.js';
   import {
     defaultStats,
-    getConfig as getWebhookConfig,
     saveConfig as saveWebhookConfig,
     sendWebhook,
     type WebhookConfig,
@@ -43,6 +43,8 @@
     deviceFingerprint,
     device = null,
     learnedProfile = null,
+    webhookConfig: webhookConfigProp,
+    onWebhookConfigChange,
     onClose,
     onAnalysisComplete,
   }: {
@@ -52,6 +54,8 @@
     deviceFingerprint?: string | null;
     device?: DiscoveredDevice | null;
     learnedProfile?: DeviceProfile | null;
+    webhookConfig: WebhookConfig;
+    onWebhookConfigChange?: (cfg: WebhookConfig) => void | Promise<void>;
     onClose: () => void;
     onAnalysisComplete?: (analysis: ProtocolAnalysis) => void;
   } = $props();
@@ -129,19 +133,10 @@
 
   // ── Webhook output ───────────────────────────────────────────────────────
   let showWebhookModal = $state(false);
-  let webhookConfig = $state<WebhookConfig | null>(null);
   let webhookStats = $state<WebhookStats>(defaultStats());
 
   const webhookKey = $derived(deviceFingerprint ?? `port:${port}`);
-
-  // Load webhook config on mount / when device changes
-  $effect(() => {
-    const key = webhookKey;
-    getWebhookConfig(key).then((cfg) => {
-      webhookConfig = cfg;
-      webhookStats = defaultStats();
-    });
-  });
+  const webhookConfig = $derived(webhookConfigProp);
 
   // Throttle timer — fires periodically; sends latest snapshot when there's
   // valid data to forward. Earlier dirty-flag pattern relied on Svelte
@@ -196,8 +191,12 @@
 
   async function handleWebhookSave(cfg: WebhookConfig) {
     await saveWebhookConfig(webhookKey, cfg);
-    webhookConfig = cfg;
+    await onWebhookConfigChange?.(cfg);
   }
+
+  const punyaFieldBerat = $derived(
+    analysisResult?.fields.some((f) => f.name === 'weight') ?? false
+  );
 
   // ── Export menu ──────────────────────────────────────────────────────────
   let exportMenuOpen = $state(false);
@@ -665,6 +664,14 @@
               fields={analysisResult?.fields ?? []}
               {lines}
             />
+            {#if punyaFieldBerat}
+              <ScalePushPanel
+                config={webhookConfig}
+                payload={buildPayload()}
+                stats={webhookStats}
+                onStatsChange={(s) => (webhookStats = s)}
+              />
+            {/if}
           {:else if bottomTab === 'investigation'}
             <AgentTracePanel
               trace={agentTrace}

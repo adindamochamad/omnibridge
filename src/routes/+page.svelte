@@ -22,6 +22,22 @@
     demoScenarioFromPort,
     isDemoPort,
   } from "$lib/demo.js";
+  import { terapkanSemuaPresetBundled } from "$lib/bundled-presets.js";
+  import {
+    BAUD_OPERASI_CAS,
+    BAUD_WARMUP_CAS,
+    DURASI_WARMUP_CAS_MS,
+    perluWarmupCas,
+    tandaiWarmupSelesai,
+    tidur,
+  } from "$lib/cas-scale.js";
+  import {
+    getConfig as getWebhookConfig,
+    saveConfig as saveWebhookConfig,
+    defaultConfig,
+    templateFormTimbangan,
+    type WebhookConfig,
+  } from "$lib/webhook.js";
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +47,9 @@
 
   /** fingerprint → learned profile */
   let profiles = $state<Record<string, DeviceProfile>>({});
+
+  /** fingerprint → konfigurasi webhook (kode timbangan, company-id, dll.) */
+  let konfigurasiWebhook = $state<Record<string, WebhookConfig>>({});
 
   function profileFor(d: DiscoveredDevice): DeviceProfile | null {
     return profiles[deviceFingerprint(d)] ?? null;
@@ -77,6 +96,42 @@
 
   // ── Commands ───────────────────────────────────────────────────────────────
 
+  async function muatKonfigurasiWebhook(devs: DiscoveredDevice[]) {
+    const baru = { ...konfigurasiWebhook };
+    await Promise.all(
+      devs.map(async (d) => {
+        const fp = deviceFingerprint(d);
+        const cfg = await getWebhookConfig(fp);
+        baru[fp] = cfg ?? defaultConfig();
+      })
+    );
+    konfigurasiWebhook = baru;
+  }
+
+  async function ubahKonfigurasiWebhookPort(
+    fp: string,
+    patch: Partial<WebhookConfig> | WebhookConfig
+  ) {
+    const lama = konfigurasiWebhook[fp] ?? defaultConfig();
+    const baru: WebhookConfig = { ...lama, ...patch };
+
+    // ENTIS = saklar auto-forward: centang → kirim terus, uncheck → stop
+    if ("entis" in patch) {
+      baru.enabled = Boolean(patch.entis);
+      baru.form_template = templateFormTimbangan();
+      baru.body_format = "form";
+    } else if ("enabled" in patch) {
+      baru.entis = Boolean(patch.enabled);
+    }
+
+    if ("scales_code" in patch || "company_id" in patch) {
+      baru.form_template = templateFormTimbangan();
+      baru.body_format = "form";
+    }
+    konfigurasiWebhook = { ...konfigurasiWebhook, [fp]: baru };
+    await saveWebhookConfig(fp, baru);
+  }
+
   async function discoverDevices() {
     scanning = true;
     scanError = null;
@@ -87,6 +142,16 @@
       ]);
       devices = discovered;
       profiles = loadedProfiles;
+
+      // Terapkan preset bawaan dari repo (mis. CAS Scale) untuk device baru
+      const hasilPreset = await terapkanSemuaPresetBundled(discovered);
+      if (hasilPreset.profilBaru > 0) {
+        profiles = await getAllProfiles();
+        toast('info', `Preset bawaan dimuat: ${hasilPreset.profilBaru} device`);
+      }
+
+      await muatKonfigurasiWebhook(devices);
+
       for (const d of devices) {
         if (baudRates[d.port] === undefined) {
           // Use learned baud if available, else device suggestion
@@ -110,7 +175,7 @@
     }
   }
 
-  function toggleDemoMode() {
+  async function toggleDemoMode() {
     if (demoActive) {
       // Remove demo devices (stop their monitors first)
       for (const d of allDemoDevices()) {
@@ -124,6 +189,9 @@
       for (const d of demos) {
         if (baudRates[d.port] === undefined) baudRates[d.port] = d.suggested_baud;
       }
+      await terapkanSemuaPresetBundled(demos);
+      profiles = await getAllProfiles();
+      await muatKonfigurasiWebhook(demos);
       demoActive = true;
     }
   }
@@ -155,6 +223,24 @@
       startDemoMonitor(port);
       return;
     }
+
+    const device = devices.find((d) => d.port === port);
+    const profil = device ? profileFor(device) : null;
+
+    // Inisialisasi baud CAS: 19200 → stop → 9600 (wajib agar kg terbaca)
+    if (device && perluWarmupCas(port, device, profil)) {
+      try {
+        toast('info', `${port}: inisialisasi CAS 19200→9600…`, 3000);
+        await invoke("start_port_monitor", { port, baudRate: BAUD_WARMUP_CAS });
+        await tidur(DURASI_WARMUP_CAS_MS);
+        await invoke("stop_port_monitor", { port }).catch(() => {});
+        baudRates[port] = BAUD_OPERASI_CAS;
+        tandaiWarmupSelesai(port);
+      } catch (e) {
+        toast('warn', `Warmup CAS gagal: ${String(e).slice(0, 80)}`, 5000);
+      }
+    }
+
     const baud = baudRates[port] ?? 9600;
     try {
       await invoke("start_port_monitor", { port, baudRate: baud });
@@ -315,12 +401,16 @@
         </div>
       {:else}
         {#each devices as device (device.port)}
+          {@const fp = deviceFingerprint(device)}
           <PortCard
             {device}
             monitoring={monitoring[device.port] ?? false}
+            selectedBaud={baudRates[device.port] ?? device.suggested_baud}
             learnedProfile={profileFor(device)}
+            webhookConfig={konfigurasiWebhook[fp] ?? null}
             onToggle={() => toggleMonitor(device.port)}
             onBaudChange={(baud) => (baudRates[device.port] = baud)}
+            onWebhookConfigChange={(patch) => ubahKonfigurasiWebhookPort(fp, patch)}
           />
         {/each}
       {/if}
@@ -430,14 +520,19 @@
       <div class="buffer-area">
         {#each monitoredPorts as port (port)}
           {@const device = devices.find((d) => d.port === port)}
+          {@const fp = device ? deviceFingerprint(device) : null}
           <div class="buffer-slot" class:visible={activeTab === port}>
             <DataBuffer
               {port}
               lines={buffers[port] ?? []}
               deviceClass={device?.device_class}
-              deviceFingerprint={device ? deviceFingerprint(device) : null}
+              deviceFingerprint={fp}
               device={device ?? null}
               learnedProfile={device ? profileFor(device) : null}
+              webhookConfig={fp ? (konfigurasiWebhook[fp] ?? defaultConfig()) : defaultConfig()}
+              onWebhookConfigChange={async (cfg) => {
+                if (fp) await ubahKonfigurasiWebhookPort(fp, cfg);
+              }}
               onClose={() => closeBuffer(port)}
               onAnalysisComplete={(a) => handleAnalysisComplete(port, a)}
             />

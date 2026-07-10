@@ -47,22 +47,43 @@ describe('parseHeaders', () => {
 });
 
 describe('renderFormBody', () => {
+  const cfg = { ...defaultConfig(), scales_code: 'S100', company_id: '2', entis: true };
+
   it('substitutes field tokens and url-encodes values', () => {
     const body = renderFormBody(
-      'scales-code={{port}}&scales-weight={{weight}}&company-id=1',
-      samplePayload
+      'scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}',
+      samplePayload,
+      cfg
     );
-    expect(body).toBe('scales-code=TIMBANGAN-01&scales-weight=1.234&company-id=1');
+    expect(body).toBe('scales-code=S100&scales-weight=1.234&company-id=2&entis=1');
+  });
+
+  it('resolves entis=0 when checkbox off', () => {
+    const body = renderFormBody(
+      'entis={{entis}}',
+      samplePayload,
+      { ...cfg, entis: false }
+    );
+    expect(body).toBe('entis=0');
   });
 
   it('resolves top-level metadata tokens', () => {
-    const body = renderFormBody('protocol={{protocol}}&conf={{confidence}}', samplePayload);
+    const body = renderFormBody('protocol={{protocol}}&conf={{confidence}}', samplePayload, cfg);
     expect(body).toBe('protocol=CAS%20Scale&conf=0.95');
   });
 
   it('leaves unknown tokens empty', () => {
-    const body = renderFormBody('missing={{unknown}}', samplePayload);
+    const body = renderFormBody('missing={{unknown}}', samplePayload, cfg);
     expect(body).toBe('missing=');
+  });
+
+  it('supports legacy port token for backward compatibility', () => {
+    const body = renderFormBody(
+      'scales-code={{port}}&scales-weight={{weight}}&company-id=1',
+      samplePayload,
+      cfg
+    );
+    expect(body).toBe('scales-code=TIMBANGAN-01&scales-weight=1.234&company-id=1');
   });
 });
 

@@ -21,7 +21,13 @@ export interface WebhookConfig {
   include_raw: boolean;
   custom_headers: string; // newline-separated "Key: Value"
   body_format: WebhookBodyFormat;
-  form_template: string; // e.g. "scales-code={{port}}&scales-weight={{weight}}&company-id=1"
+  form_template: string; // e.g. "scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}"
+  /** Kode timbangan untuk endpoint legacy (dropdown). */
+  scales_code: string;
+  /** ID perusahaan untuk endpoint legacy (dropdown). */
+  company_id: string;
+  /** Centang ENTIS = auto-forward webhook aktif; juga dikirim sebagai entis=1/0 di form body. */
+  entis: boolean;
 }
 
 export interface WebhookStats {
@@ -55,7 +61,15 @@ export function defaultConfig(): WebhookConfig {
     custom_headers: '',
     body_format: 'json',
     form_template: '',
+    scales_code: 'S100',
+    company_id: '2',
+    entis: false,
   };
+}
+
+/** Template form standar untuk integrasi timbangan legacy. */
+export function templateFormTimbangan(): string {
+  return 'scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}';
 }
 
 export function defaultStats(): WebhookStats {
@@ -89,7 +103,13 @@ export async function getConfig(fingerprint: string): Promise<WebhookConfig | nu
   if (!stored) return null;
   // Merge defaults so configs saved before body_format/form_template existed
   // still load with sane values instead of undefined.
-  return { ...defaultConfig(), ...stored };
+  const merged = { ...defaultConfig(), ...stored };
+  // ENTIS = saklar auto-forward; selaraskan dengan enabled
+  if (stored.entis === undefined && stored.enabled) {
+    merged.entis = true;
+  }
+  merged.enabled = merged.entis;
+  return merged;
 }
 
 export async function saveConfig(fingerprint: string, config: WebhookConfig): Promise<void> {
@@ -131,7 +151,11 @@ export interface SendResult {
 
 /** Resolve a single `{{token}}` against the payload. Field values win over the
  *  top-level metadata keys, so `{{weight}}` pulls fields.weight.value. */
-function resolveToken(token: string, payload: WebhookPayload): string {
+function resolveToken(
+  token: string,
+  payload: WebhookPayload,
+  config?: WebhookConfig
+): string {
   switch (token) {
     case 'port':
       return payload.port;
@@ -143,6 +167,12 @@ function resolveToken(token: string, payload: WebhookPayload): string {
       return String(payload.timestamp);
     case 'device_class':
       return payload.device_class ?? '';
+    case 'scales_code':
+      return config?.scales_code ?? '';
+    case 'company_id':
+      return config?.company_id ?? '';
+    case 'entis':
+      return config?.entis ? '1' : '0';
     default: {
       const field = payload.fields[token];
       return field ? String(field.value) : '';
@@ -153,9 +183,13 @@ function resolveToken(token: string, payload: WebhookPayload): string {
 /** Render a form template like `scales-weight={{weight}}&company-id=1` into a
  *  urlencoded body. Only the substituted VALUES are encoded — the `&`/`=`
  *  structure is left literal so it stays a valid form body. */
-export function renderFormBody(template: string, payload: WebhookPayload): string {
-  return template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, token: string) =>
-    encodeURIComponent(resolveToken(token, payload))
+export function renderFormBody(
+  template: string,
+  payload: WebhookPayload,
+  config?: WebhookConfig
+): string {
+  return template.replace(/\{\{\s*([\w._-]+)\s*\}\}/g, (_match, token: string) =>
+    encodeURIComponent(resolveToken(token, payload, config))
   );
 }
 
@@ -183,7 +217,9 @@ export async function sendWebhook(
   let body: string;
   let contentType: string;
   if (config.body_format === 'form') {
-    body = renderFormBody(config.form_template ?? '', payload);
+    const template =
+      config.form_template?.trim() || templateFormTimbangan();
+    body = renderFormBody(template, payload, config);
     contentType = 'application/x-www-form-urlencoded';
   } else {
     body = JSON.stringify(payload);

@@ -3,26 +3,65 @@
   import { invoke } from "@tauri-apps/api/core";
   import { BAUD_RATES, BAUDS_TO_PROBE, CLASS_COLORS, type BaudProbeResult, type DiscoveredDevice } from "$lib/types.js";
   import type { DeviceProfile } from "$lib/profiles.js";
+  import {
+    OPSI_KODE_TIMBANGAN,
+    OPSI_COMPANY_ID,
+    apakahPerangkatCas,
+  } from "$lib/cas-scale.js";
+  import type { WebhookConfig } from "$lib/webhook.js";
 
   let {
     device,
     monitoring = false,
+    selectedBaud = device.suggested_baud,
     learnedProfile = null,
+    webhookConfig = null,
     onToggle,
     onBaudChange,
+    onWebhookConfigChange,
   }: {
     device: DiscoveredDevice;
     monitoring: boolean;
+    selectedBaud?: number;
     learnedProfile?: DeviceProfile | null;
+    webhookConfig?: WebhookConfig | null;
     onToggle: () => void;
     onBaudChange: (baud: number) => void;
+    onWebhookConfigChange?: (patch: Partial<WebhookConfig>) => void;
   } = $props();
 
-  // Initialize from prop but allow user selection to diverge.
-  // untrack() prevents Svelte from warning about capture-initial-only semantics.
-  let selectedBaud = $state(untrack(() => device.suggested_baud));
+  // Sinkronkan dropdown saat parent mengubah baud (mis. setelah warmup CAS)
+  $effect(() => {
+    selectedBaudLocal = selectedBaud;
+  });
+
+  let selectedBaudLocal = $state(untrack(() => selectedBaud));
 
   const color = $derived(CLASS_COLORS[device.device_class] ?? "#4b5563");
+
+  const tampilkanDropdownTimbangan = $derived(
+    apakahPerangkatCas(device, learnedProfile) && webhookConfig !== null
+  );
+
+  function handleKodeTimbangan(e: Event) {
+    onWebhookConfigChange?.({
+      scales_code: (e.target as HTMLSelectElement).value,
+    });
+  }
+
+  function handleCompanyId(e: Event) {
+    onWebhookConfigChange?.({
+      company_id: (e.target as HTMLSelectElement).value,
+    });
+  }
+
+  function handleEntis(e: Event) {
+    const dicentang = (e.target as HTMLInputElement).checked;
+    onWebhookConfigChange?.({
+      entis: dicentang,
+      enabled: dicentang,
+    });
+  }
 
   // Auto baud probe state
   let probing = $state(false);
@@ -35,7 +74,7 @@
 
   function handleBaudChange(e: Event) {
     const val = parseInt((e.target as HTMLSelectElement).value, 10);
-    selectedBaud = val;
+    selectedBaudLocal = val;
     onBaudChange(val);
   }
 
@@ -71,7 +110,7 @@
       }
       const best = valid.reduce((a, b) => (b.score > a.score ? b : a));
       probeWinner = best;
-      selectedBaud = best.baud;
+      selectedBaudLocal = best.baud;
       onBaudChange(best.baud);
 
       // Auto-dismiss winner strip after 8 seconds
@@ -132,7 +171,7 @@
     <span class="baud-label">Baud</span>
     <select
       class="baud-select"
-      value={selectedBaud}
+      value={selectedBaudLocal}
       onchange={handleBaudChange}
       disabled={monitoring || probing}
     >
@@ -160,6 +199,46 @@
       {/if}
     </button>
   </div>
+
+  {#if tampilkanDropdownTimbangan && webhookConfig}
+    <div class="scale-row">
+      <div class="scale-field">
+        <span class="scale-label">Kode</span>
+        <select
+          class="scale-select"
+          value={webhookConfig.scales_code}
+          onchange={handleKodeTimbangan}
+        >
+          {#each OPSI_KODE_TIMBANGAN as kode}
+            <option value={kode}>{kode}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="scale-field">
+        <span class="scale-label">Co.ID</span>
+        <select
+          class="scale-select"
+          value={webhookConfig.company_id}
+          onchange={handleCompanyId}
+        >
+          {#each OPSI_COMPANY_ID as id}
+            <option value={id}>{id}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+    <label class="entis-row" title="Centang untuk auto-kirim berat ke webhook terus-menerus">
+      <input
+        type="checkbox"
+        checked={webhookConfig.entis}
+        onchange={handleEntis}
+      />
+      <span class="entis-label">ENTIS</span>
+      {#if webhookConfig.entis}
+        <span class="entis-auto">auto-kirim</span>
+      {/if}
+    </label>
+  {/if}
 
   {#if probing}
     <div class="probe-strip probing">
@@ -356,6 +435,76 @@
   .baud-select:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .scale-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+  }
+
+  .scale-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .scale-label {
+    font-size: 0.62rem;
+    color: #5a5a7a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .scale-select {
+    background: #111120;
+    border: 1px solid #2a2a42;
+    border-radius: 5px;
+    color: #a0a0c0;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.35rem;
+    cursor: pointer;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .entis-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    padding: 0.25rem 0.45rem;
+    background: #141828;
+    border: 1px solid #2a2a42;
+    border-radius: 5px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .entis-row input[type='checkbox'] {
+    accent-color: #4f6ef7;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+  }
+
+  .entis-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #90a8e0;
+    letter-spacing: 0.06em;
+  }
+
+  .entis-auto {
+    margin-left: auto;
+    font-size: 0.6rem;
+    color: #86efac;
+    background: #1a2e1a;
+    border: 1px solid #1e4028;
+    padding: 0.05rem 0.35rem;
+    border-radius: 6px;
+    font-family: "JetBrains Mono", monospace;
   }
 
   .auto-btn {

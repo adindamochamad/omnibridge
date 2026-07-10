@@ -1,6 +1,6 @@
 import { Store } from '@tauri-apps/plugin-store';
 import { deviceFingerprint, type DiscoveredDevice } from './types.js';
-import type { AnalysisField, ProtocolAnalysis } from './claude.js';
+import type { AnalysisField, CommandPreset, ProtocolAnalysis } from './claude.js';
 
 const STORE_FILE = 'omnibridge.profiles.json';
 const KEY_PROFILES = 'profiles';
@@ -19,7 +19,13 @@ export interface DeviceProfile {
   confidence: number;
   device_hint: string;
   expected_fields: AnalysisField[];
+  /** Preset perintah yang dikirim ke device (Tare, Zero, dll). */
+  command_presets?: CommandPreset[];
   notes: string;
+  /** Timbangan CAS butuh warmup baud 19200 → 9600 saat sesi pertama. */
+  needs_baud_warmup?: boolean;
+  /** Asal profil: 'bundled' dari repo, 'learned' dari analisis AI. */
+  sumber?: 'bundled' | 'learned';
   first_learned_at: number;
   last_seen_at: number;
   sample_count: number;
@@ -71,7 +77,10 @@ export async function saveProfile(
     confidence: analysis.confidence,
     device_hint: analysis.device_hint,
     expected_fields: analysis.fields,
+    command_presets: analysis.command_presets ?? existing?.command_presets ?? [],
     notes: analysis.notes,
+    needs_baud_warmup: existing?.needs_baud_warmup,
+    sumber: 'learned',
     first_learned_at: existing?.first_learned_at ?? now,
     last_seen_at: now,
     sample_count: (existing?.sample_count ?? 0) + 1,
@@ -112,5 +121,6 @@ export function profileToAnalysis(p: DeviceProfile): ProtocolAnalysis {
     device_hint: p.device_hint,
     fields: p.expected_fields,
     notes: p.notes,
+    command_presets: p.command_presets,
   };
 }

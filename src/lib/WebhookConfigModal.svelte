@@ -4,6 +4,7 @@
     defaultConfig,
     sendWebhook,
     renderFormBody,
+    templateFormTimbangan,
     type WebhookConfig,
     type WebhookPayload,
     type WebhookStats,
@@ -35,6 +36,8 @@
   async function handleSave() {
     saving = true;
     try {
+      // Sinkronkan ENTIS dengan toggle enable agar konsisten dengan port card
+      draft = { ...draft, entis: draft.enabled };
       await onSave(draft);
       onClose();
     } finally {
@@ -78,9 +81,14 @@
   const bodyPreview = $derived.by(() => {
     if (!samplePayload) return '';
     return draft.body_format === 'form'
-      ? renderFormBody(draft.form_template ?? '', samplePayload)
+      ? renderFormBody(
+          draft.form_template?.trim() || templateFormTimbangan(),
+          samplePayload,
+          draft
+        )
       : JSON.stringify(samplePayload, null, 2);
   });
+
 </script>
 
 <div
@@ -151,15 +159,24 @@
 
       <!-- Form template (only when form-encoded) -->
       {#if draft.body_format === 'form'}
+        <div class="field hint-box">
+          <span class="hint">
+            Kode Timbangan, Company ID, dan <strong>ENTIS</strong> diatur di card port sidebar.
+            Centang ENTIS = auto-forward aktif.
+            Saat ini: <code>{draft.scales_code}</code> · company <code>{draft.company_id}</code>
+            · ENTIS <code>{draft.entis ? '1 (auto-kirim)' : '0'}</code>
+          </span>
+        </div>
+
         <div class="field">
           <label for="wh-template">
             Form Body Template
-            <span class="hint">use <code>{'{{token}}'}</code> placeholders</span>
+            <span class="hint">gunakan <code>{'{{scales_code}}'}</code>, <code>{'{{weight}}'}</code>, <code>{'{{company_id}}'}</code></span>
           </label>
           <textarea
             id="wh-template"
             rows="2"
-            placeholder="scales-code={'{{port}}'}&amp;scales-weight={'{{weight}}'}&amp;company-id=1"
+            placeholder="scales-code={'{{scales_code}}'}&amp;scales-weight={'{{weight}}'}&amp;company-id={'{{company_id}}'}"
             bind:value={draft.form_template}
           ></textarea>
           {#if availableTokens.length > 0}
@@ -412,6 +429,26 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
+  }
+
+  .hint-box {
+    padding: 0.45rem 0.6rem;
+    background: #141c30;
+    border-radius: 6px;
+    border: 1px solid #1e2a40;
+  }
+
+  .hint-box .hint {
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+
+  .hint-box code {
+    background: #1a2038;
+    padding: 0.05rem 0.25rem;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    color: #8aa0d0;
   }
 
   /* Stats */

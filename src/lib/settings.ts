@@ -3,7 +3,11 @@ import { Store } from '@tauri-apps/plugin-store';
 const STORE_FILE = 'omnibridge.settings.json';
 const KEY_API_KEY = 'anthropic_api_key';
 
+/** Kunci default dari build-time env — diisi lewat .env saat development/build. */
+const KUNCI_DEFAULT = (import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '';
+
 let _store: Store | null = null;
+let _sudahSeedDefault = false;
 
 async function getStore(): Promise<Store> {
   if (!_store) {
@@ -17,16 +21,19 @@ export async function getApiKey(): Promise<string | null> {
     const store = await getStore();
     const stored = await store.get<string>(KEY_API_KEY);
     if (stored) return stored;
+
+    // Seed kunci default ke store sekali agar tidak perlu diisi manual tiap buka app
+    if (KUNCI_DEFAULT && !_sudahSeedDefault) {
+      _sudahSeedDefault = true;
+      await store.set(KEY_API_KEY, KUNCI_DEFAULT);
+      await store.save();
+      return KUNCI_DEFAULT;
+    }
   } catch {
     // store not available (e.g. browser preview)
   }
-  // VITE_-prefixed env vars are inlined into the bundle at build time by Vite.
-  // Honoring this fallback in a release build would leak the developer's key
-  // into every shipped DMG/MSI, so it is restricted to `npm run tauri dev`.
-  if (import.meta.env.DEV) {
-    return (import.meta.env.VITE_ANTHROPIC_API_KEY as string) || null;
-  }
-  return null;
+
+  return KUNCI_DEFAULT || null;
 }
 
 export async function setApiKey(key: string): Promise<void> {

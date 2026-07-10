@@ -1,0 +1,67 @@
+{
+  "id": "cas-scale",
+  "name": "CAS Weighing Scale",
+  "description": "Preset bawaan untuk timbangan CAS — protokol ASCII ST/US + berat kg. Dibagikan lewat repo agar pengguna lain langsung dapat profil siap pakai.",
+  "match": {
+    "manufacturer_contains": ["CAS"],
+    "product_contains": ["CL", "Scale", "scale"],
+    "protocol_contains": ["CAS", "Scale", "timbang"]
+  },
+  "profile": {
+    "protocol": "CAS Scale ASCII",
+    "confidence": 95,
+    "device_hint": "CAS industrial weighing scale (CL series)",
+    "suggested_baud": 9600,
+    "needs_baud_warmup": true,
+    "notes": "Timbangan CAS butuh inisialisasi baud 19200 → stop → 9600 saat sesi pertama. Pola: ST/US,GS,  X.XXX kg",
+    "expected_fields": [
+      {
+        "name": "weight",
+        "value": "1.234",
+        "description": "Berat kotor (gross weight)",
+        "unit": "kg",
+        "regex": "GS,\\s*([\\d.]+)\\s*kg",
+        "capture_group": 1,
+        "data_type": "number"
+      },
+      {
+        "name": "stable",
+        "value": "ST",
+        "description": "Flag stabilitas (ST=stabil, US=unstable)",
+        "regex": "^(ST|US),",
+        "capture_group": 1,
+        "data_type": "string"
+      }
+    ],
+    "command_presets": [
+      {
+        "name": "Tare",
+        "description": "Nolkan tara timbangan",
+        "hex": "1B 54 0D 0A"
+      },
+      {
+        "name": "Zero",
+        "description": "Zero scale",
+        "hex": "1B 5A 0D 0A"
+      },
+      {
+        "name": "Query",
+        "description": "Minta pembacaan berat",
+        "ascii": "W\\r\\n"
+      }
+    ]
+  },
+  "webhook": {
+    "enabled": false,
+    "url": "",
+    "method": "POST",
+    "throttle_ms": 1000,
+    "include_raw": false,
+    "custom_headers": "",
+    "body_format": "form",
+    "form_template": "scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}",
+    "scales_code": "S100",
+    "company_id": "2",
+    "entis": false
+  }
+}

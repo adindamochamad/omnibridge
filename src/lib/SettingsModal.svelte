@@ -18,17 +18,12 @@
   });
 
   async function load() {
-    // Delegate to settings.getApiKey() — it already returns the store value or
-    // the DEV-only env fallback. Reading import.meta.env directly here would
-    // leak the developer's key into release builds (Vite inlines at build time).
     try {
-      const envKey = import.meta.env.DEV
-        ? ((import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '')
-        : '';
+      const envKey = (import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '';
       const stored = await getApiKey();
-      if (stored && stored !== envKey) {
+      if (stored) {
         apiKey = stored;
-        keySource = 'store';
+        keySource = stored === envKey && envKey ? 'env' : 'store';
       } else if (envKey) {
         apiKey = envKey;
         keySource = 'env';
