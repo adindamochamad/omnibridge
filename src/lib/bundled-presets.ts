@@ -2,7 +2,6 @@ import casScalePreset from '../../presets/cas-scale.json';
 import { getAllProfiles, type DeviceProfile } from './profiles.js';
 import { saveConfig, getConfig, defaultConfig, type WebhookConfig } from './webhook.js';
 import { deviceFingerprint, type DiscoveredDevice } from './types.js';
-import { apakahPerangkatCas } from './cas-scale.js';
 import type { CommandPreset } from './claude.js';
 
 interface PresetBundled {
@@ -40,7 +39,8 @@ function cocokPreset(device: DiscoveredDevice, preset: PresetBundled): boolean {
     produk.includes(k.toLowerCase())
   );
 
-  return !!(cocokManuf || cocokProduk || apakahPerangkatCas(device));
+  // Hanya match eksplisit — hindari false positive dari kata "scale" generik
+  return !!(cocokManuf || cocokProduk);
 }
 
 /** Terapkan preset bawaan ke store lokal jika belum ada profil untuk device ini. */

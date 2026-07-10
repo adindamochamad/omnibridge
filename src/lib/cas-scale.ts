@@ -23,23 +23,28 @@ export function apakahPerangkatCas(
   device: DiscoveredDevice,
   profil?: DeviceProfile | null
 ): boolean {
-  const teksGabungan = [
-    device.manufacturer,
-    device.product,
-    device.label,
-    profil?.protocol,
-    profil?.device_hint,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+  // Demo CAS selalu dikenali
+  if (device.port === 'demo://cas-scale') return true;
 
-  return (
-    teksGabungan.includes('cas') ||
-    teksGabungan.includes('timbang') ||
-    teksGabungan.includes('scale') ||
-    teksGabungan.includes('cl5000')
-  );
+  const manuf = (device.manufacturer ?? '').toLowerCase();
+  const produk = (device.product ?? '').toLowerCase();
+  const protokol = (profil?.protocol ?? '').toLowerCase();
+  const hint = (profil?.device_hint ?? '').toLowerCase();
+
+  // Manufacturer CAS Corp / CAS ...
+  if (/\bcas\b/.test(manuf) || manuf.includes('cas corp')) return true;
+
+  // Produk seri CL (CL5000, CL-5000, dll.) — pola khas timbangan CAS
+  if (/\bcl[\s-]?\d/.test(produk)) return true;
+
+  // Sudah teridentifikasi sebagai protokol CAS dari profil/learned
+  if (protokol.includes('cas scale') || protokol.includes('cas ')) return true;
+  if (hint.includes('cas') && hint.includes('scale')) return true;
+
+  // Profil bundled eksplisit minta warmup CAS
+  if (profil?.needs_baud_warmup === true && protokol.includes('cas')) return true;
+
+  return false;
 }
 
 export function perluWarmupCas(
@@ -50,7 +55,7 @@ export function perluWarmupCas(
   if (port.startsWith('demo://')) return false;
   if (portSudahWarmup.has(port)) return false;
   if (profil?.needs_baud_warmup === false) return false;
-  return apakahPerangkatCas(device, profil) || profil?.needs_baud_warmup === true;
+  return apakahPerangkatCas(device, profil);
 }
 
 /** Tandai port sudah di-warmup agar tidak diulang di sesi yang sama. */

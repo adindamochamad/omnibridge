@@ -19,7 +19,9 @@
 
   async function load() {
     try {
-      const envKey = (import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '';
+      const envKey = import.meta.env.DEV
+        ? ((import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '')
+        : '';
       const stored = await getApiKey();
       if (stored) {
         apiKey = stored;

@@ -13,6 +13,7 @@
   let {
     device,
     monitoring = false,
+    starting = false,
     selectedBaud = device.suggested_baud,
     learnedProfile = null,
     webhookConfig = null,
@@ -22,6 +23,7 @@
   }: {
     device: DiscoveredDevice;
     monitoring: boolean;
+    starting?: boolean;
     selectedBaud?: number;
     learnedProfile?: DeviceProfile | null;
     webhookConfig?: WebhookConfig | null;
@@ -132,10 +134,20 @@
     <button
       class="monitor-btn"
       class:running={monitoring}
+      class:starting
       onclick={onToggle}
-      title={monitoring ? "Stop monitoring" : "Start monitoring"}
+      disabled={starting}
+      title={
+        starting
+          ? "Menyiapkan port…"
+          : monitoring
+          ? "Stop monitoring"
+          : "Start monitoring"
+      }
     >
-      {#if monitoring}
+      {#if starting}
+        <span class="spin-s">◌</span> Starting…
+      {:else if monitoring}
         <span class="dot pulsing"></span> Live
       {:else}
         ▶ Monitor
@@ -173,7 +185,7 @@
       class="baud-select"
       value={selectedBaudLocal}
       onchange={handleBaudChange}
-      disabled={monitoring || probing}
+      disabled={monitoring || probing || starting}
     >
       {#each BAUD_RATES as rate}
         <option value={rate}>{rate}</option>
@@ -185,7 +197,9 @@
       onclick={autoProbe}
       disabled={monitoring || probing || device.port.startsWith('demo://')}
       title={
-        device.port.startsWith('demo://')
+        starting
+          ? 'Tunggu monitor selesai dimulai'
+          : device.port.startsWith('demo://')
           ? 'Demo device uses fixed baud'
           : monitoring
           ? 'Stop monitoring first'
@@ -320,6 +334,19 @@
     background: #1a2e1a;
     border-color: #22c55e44;
     color: #22c55e;
+  }
+
+  .monitor-btn.starting {
+    background: #1e1a30;
+    border-color: #4f6ef744;
+    color: #90b0ff;
+    opacity: 0.85;
+    cursor: wait;
+  }
+
+  .monitor-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .dot {

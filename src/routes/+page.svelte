@@ -57,6 +57,8 @@
 
   /** port → active boolean */
   let monitoring = $state<Record<string, boolean>>({});
+  /** port → sedang proses start/warmup (cegah double-click) */
+  let sedangMemulai = $state<Record<string, boolean>>({});
   /** port → selected baud rate */
   let baudRates = $state<Record<string, number>>({});
   /** port → data lines */
@@ -224,29 +226,37 @@
       return;
     }
 
+    // Cegah double-click / start bersamaan saat warmup masih berjalan
+    if (sedangMemulai[port] || monitoring[port]) return;
+    sedangMemulai[port] = true;
+
     const device = devices.find((d) => d.port === port);
     const profil = device ? profileFor(device) : null;
+    const butuhWarmup = !!(device && perluWarmupCas(port, device, profil));
 
-    // Inisialisasi baud CAS: 19200 → stop → 9600 (wajib agar kg terbaca)
-    if (device && perluWarmupCas(port, device, profil)) {
-      try {
-        toast('info', `${port}: inisialisasi CAS 19200→9600…`, 3000);
-        await invoke("start_port_monitor", { port, baudRate: BAUD_WARMUP_CAS });
-        await tidur(DURASI_WARMUP_CAS_MS);
-        await invoke("stop_port_monitor", { port }).catch(() => {});
-        baudRates[port] = BAUD_OPERASI_CAS;
-        tandaiWarmupSelesai(port);
-      } catch (e) {
-        toast('warn', `Warmup CAS gagal: ${String(e).slice(0, 80)}`, 5000);
-      }
-    }
-
-    const baud = baudRates[port] ?? 9600;
     try {
+      // Inisialisasi baud CAS: 19200 → stop → 9600 (wajib agar kg terbaca)
+      if (butuhWarmup) {
+        try {
+          toast('info', `${port}: inisialisasi CAS 19200→9600…`, 3000);
+          await invoke("start_port_monitor", { port, baudRate: BAUD_WARMUP_CAS });
+          await tidur(DURASI_WARMUP_CAS_MS);
+          await invoke("stop_port_monitor", { port }).catch(() => {});
+          await tidur(150); // beri waktu port dilepas (Windows)
+          baudRates[port] = BAUD_OPERASI_CAS;
+        } catch (e) {
+          toast('warn', `Warmup CAS gagal: ${String(e).slice(0, 80)}`, 5000);
+          return;
+        }
+      }
+
+      const baud = baudRates[port] ?? 9600;
       await invoke("start_port_monitor", { port, baudRate: baud });
       monitoring[port] = true;
       buffers[port] = [];
       activeTab = port;
+
+      if (butuhWarmup) tandaiWarmupSelesai(port);
 
       const unData = await listen<PortDataEvent>("port:data", (ev) => {
         if (ev.payload.port !== port) return;
@@ -283,6 +293,8 @@
     } catch (e) {
       monitoring[port] = false;
       scanError = String(e);
+    } finally {
+      sedangMemulai[port] = false;
     }
   }
 
@@ -405,6 +417,7 @@
           <PortCard
             {device}
             monitoring={monitoring[device.port] ?? false}
+            starting={sedangMemulai[device.port] ?? false}
             selectedBaud={baudRates[device.port] ?? device.suggested_baud}
             learnedProfile={profileFor(device)}
             webhookConfig={konfigurasiWebhook[fp] ?? null}
