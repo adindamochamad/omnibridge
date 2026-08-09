@@ -4,20 +4,30 @@ import {
   defaultConfig,
   sendWebhook,
   renderFormBody,
+  shouldSendWebhook,
   type WebhookPayload,
 } from '../src/lib/webhook.js';
 import { urlEfektifUntukWebhook, URL_WEBHOOK_ONLINE } from '../src/lib/cas-scale.js';
 import { URL_WEBHOOK_DEV } from '../src/lib/konfigurasi-default-cas.js';
+import { applyWebhookPreset, WEBHOOK_PRESETS } from '../src/lib/webhook-presets.js';
 
 const samplePayload: WebhookPayload = {
   timestamp: 1719500000000,
-  port: 'TIMBANGAN-01',
+  port: 'SCALE-01',
   device_class: 'scale',
   protocol: 'CAS Scale',
   confidence: 0.95,
   fields: {
     weight: { value: 1.234, unit: 'kg', updated_at: 1719500000000 },
     stable: { value: 'ST', updated_at: 1719500000000 },
+  },
+};
+
+const unstablePayload: WebhookPayload = {
+  ...samplePayload,
+  fields: {
+    ...samplePayload.fields,
+    stable: { value: 'US', updated_at: 1719500000000 },
   },
 };
 
@@ -73,11 +83,7 @@ describe('renderFormBody', () => {
   });
 
   it('resolves entis=0 when checkbox off', () => {
-    const body = renderFormBody(
-      'entis={{entis}}',
-      samplePayload,
-      { ...cfg, entis: false }
-    );
+    const body = renderFormBody('entis={{entis}}', samplePayload, { ...cfg, entis: false });
     expect(body).toBe('entis=0');
   });
 
@@ -97,12 +103,62 @@ describe('renderFormBody', () => {
       samplePayload,
       cfg
     );
-    expect(body).toBe('scales-code=TIMBANGAN-01&scales-weight=1.234&company-id=1');
+    expect(body).toBe('scales-code=SCALE-01&scales-weight=1.234&company-id=1');
+  });
+});
+
+describe('shouldSendWebhook', () => {
+  it('allows all payloads when filter is disabled', () => {
+    const cfg = { ...defaultConfig(), send_filter: { enabled: false, field: '', value: '' } };
+    expect(shouldSendWebhook(cfg, samplePayload)).toBe(true);
+    expect(shouldSendWebhook(cfg, unstablePayload)).toBe(true);
+  });
+
+  it('blocks payload when field value does not match', () => {
+    const cfg = {
+      ...defaultConfig(),
+      send_filter: { enabled: true, field: 'stable', value: 'ST' },
+    };
+    expect(shouldSendWebhook(cfg, samplePayload)).toBe(true);
+    expect(shouldSendWebhook(cfg, unstablePayload)).toBe(false);
+  });
+
+  it('blocks when filter field is missing from payload', () => {
+    const cfg = {
+      ...defaultConfig(),
+      send_filter: { enabled: true, field: 'missing', value: 'x' },
+    };
+    expect(shouldSendWebhook(cfg, samplePayload)).toBe(false);
+  });
+
+  it('passes through when filter enabled but field name empty', () => {
+    const cfg = {
+      ...defaultConfig(),
+      send_filter: { enabled: true, field: '', value: 'ST' },
+    };
+    expect(shouldSendWebhook(cfg, unstablePayload)).toBe(true);
+  });
+});
+
+describe('webhook presets', () => {
+  it('applies preset without overwriting URL or headers', () => {
+    const cfg = {
+      ...defaultConfig(),
+      url: 'https://example.com/hook',
+      custom_headers: 'X-API-Key: secret',
+    };
+    const preset = WEBHOOK_PRESETS.find((p) => p.id === 'form-scale')!;
+    const hasil = applyWebhookPreset(cfg, preset);
+    expect(hasil.url).toBe('https://example.com/hook');
+    expect(hasil.custom_headers).toBe('X-API-Key: secret');
+    expect(hasil.body_format).toBe('form');
+    expect(hasil.send_filter.enabled).toBe(true);
+    expect(hasil.send_filter.field).toBe('stable');
   });
 });
 
 describe('sendWebhook URL validation', () => {
-  it('default config punya URL DEV dan gs-key', () => {
+  it('default config punya URL DEV dan gs-key placeholder', () => {
     const cfg = defaultConfig();
     expect(cfg.url).toBe(URL_WEBHOOK_DEV);
     expect(cfg.custom_headers).toContain('gs-key');

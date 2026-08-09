@@ -124,3 +124,106 @@ export function profileToAnalysis(p: DeviceProfile): ProtocolAnalysis {
     command_presets: p.command_presets,
   };
 }
+
+// ── Export / import ───────────────────────────────────────────────────────────
+
+export const PROFILE_EXPORT_VERSION = 1;
+
+export interface ProfileExportBundle {
+  version: number;
+  exported_at: string;
+  app: 'omnibridge';
+  profiles: DeviceProfile[];
+}
+
+export interface ProfileImportResult {
+  imported: number;
+  total: number;
+}
+
+function isValidProfile(value: unknown): value is DeviceProfile {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as DeviceProfile;
+  return (
+    typeof p.fingerprint === 'string' &&
+    p.fingerprint.length > 0 &&
+    typeof p.protocol === 'string' &&
+    Array.isArray(p.expected_fields)
+  );
+}
+
+/** Bangun bundle export dari map profil yang ada. */
+export function buildProfileExportBundle(
+  profiles: Record<string, DeviceProfile>
+): ProfileExportBundle {
+  return {
+    version: PROFILE_EXPORT_VERSION,
+    exported_at: new Date().toISOString(),
+    app: 'omnibridge',
+    profiles: Object.values(profiles),
+  };
+}
+
+/** Parse JSON export — mendukung bundle resmi atau array profil mentah. */
+export function parseProfileExport(json: string): DeviceProfile[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error('File bukan JSON yang valid');
+  }
+
+  let kandidat: unknown[];
+  if (Array.isArray(parsed)) {
+    kandidat = parsed;
+  } else if (
+    parsed &&
+    typeof parsed === 'object' &&
+    Array.isArray((parsed as ProfileExportBundle).profiles)
+  ) {
+    const bundle = parsed as ProfileExportBundle;
+    if (bundle.app && bundle.app !== 'omnibridge') {
+      throw new Error('File export bukan dari OmniBridge');
+    }
+    kandidat = bundle.profiles;
+  } else {
+    throw new Error('Format export tidak dikenali — harus bundle OmniBridge atau array profil');
+  }
+
+  const valid = kandidat.filter(isValidProfile);
+  if (valid.length === 0) {
+    throw new Error('Tidak ada profil valid di file');
+  }
+  return valid;
+}
+
+/** Gabungkan profil impor ke map yang ada. */
+export function mergeProfileMaps(
+  existing: Record<string, DeviceProfile>,
+  incoming: DeviceProfile[],
+  mode: 'merge' | 'replace'
+): Record<string, DeviceProfile> {
+  const hasil = mode === 'replace' ? {} : { ...existing };
+  for (const profil of incoming) {
+    hasil[profil.fingerprint] = profil;
+  }
+  return hasil;
+}
+
+export async function exportProfilesJson(): Promise<string> {
+  const all = await getAllProfiles();
+  return JSON.stringify(buildProfileExportBundle(all), null, 2);
+}
+
+export async function importProfilesJson(
+  json: string,
+  mode: 'merge' | 'replace' = 'merge'
+): Promise<ProfileImportResult> {
+  const incoming = parseProfileExport(json);
+  const store = await getStore();
+  const existing = mode === 'replace' ? {} : await getAllProfiles();
+  const merged = mergeProfileMaps(existing, incoming, mode);
+  await store.set(KEY_PROFILES, merged);
+  await store.save();
+  return { imported: incoming.length, total: Object.keys(merged).length };
+}

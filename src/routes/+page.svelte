@@ -558,7 +558,12 @@
 </div>
 
 {#if showSettings}
-  <SettingsModal onClose={() => { showSettings = false; refreshApiKeyStatus(); }} />
+  <SettingsModal
+    onClose={() => { showSettings = false; refreshApiKeyStatus(); }}
+    onProfilesChanged={async () => {
+      profiles = await getAllProfiles();
+    }}
+  />
 {/if}
 
 <!-- Toast stack -->

@@ -11,7 +11,7 @@ OmniBridge identifies any legacy serial device protocol — binary, undocumented
 ![Svelte 5](https://img.shields.io/badge/Svelte-5.0-FF3E00?logo=svelte)
 ![Rust](https://img.shields.io/badge/Rust-stable-000000?logo=rust)
 ![CI](https://github.com/adindamochamad/omnibridge/actions/workflows/ci.yml/badge.svg)
-![29 tests](https://img.shields.io/badge/tests-29%20passing-22c55e)
+![40 tests](https://img.shields.io/badge/tests-40%20passing-22c55e)
 
 *Built for the Claude Opus 4.7 Hackathon 2026 · Problem Statement: **Build For What's Next***
 
@@ -297,6 +297,9 @@ User clicks 🔬 Investigate on Modbus PLC
 - [x] Auto baud rate probing
 - [x] Bidirectional communication
 - [x] Webhook forwarding
+- [x] Webhook send filter (field = value)
+- [x] Webhook quick presets
+- [x] Device profile export/import
 - [x] CSV/JSON export
 - [x] Demo mode with 3 virtual devices
 - [ ] Modbus RTU + other binary protocol showcases

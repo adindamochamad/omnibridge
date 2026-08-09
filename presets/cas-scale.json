@@ -56,12 +56,13 @@
     "method": "POST",
     "throttle_ms": 1000,
     "include_raw": false,
-    "custom_headers": "gs-key: 8g0kc4skc0gc40kkgcskw40kgg0k84ssgcs4ss4w",
+    "custom_headers": "gs-key: your-api-key-here",
     "body_format": "form",
     "form_template": "scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}",
     "scales_code": "S100",
     "company_id": "2",
     "entis": false,
-    "mode_webhook": "DEV"
+    "mode_webhook": "DEV",
+    "send_filter": { "enabled": true, "field": "stable", "value": "ST" }
   }
 }

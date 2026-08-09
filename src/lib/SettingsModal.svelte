@@ -1,10 +1,11 @@
 <script lang="ts">
   import { getApiKey, setApiKey, clearApiKey } from '$lib/settings.js';
-  import { getAllProfiles, clearAllProfiles } from '$lib/profiles.js';
+  import { getAllProfiles, clearAllProfiles, exportProfilesJson, importProfilesJson } from '$lib/profiles.js';
+  import { downloadFile } from '$lib/export.js';
   import versiPkg from '../../package.json';
   import Anthropic from '@anthropic-ai/sdk';
 
-  let { onClose }: { onClose: () => void } = $props();
+  let { onClose, onProfilesChanged }: { onClose: () => void; onProfilesChanged?: () => void } = $props();
 
   let apiKey = $state('');
   let showKey = $state(false);
@@ -98,6 +99,43 @@
   let profilesCleared = $state(false);
   let profilesConfirmPending = $state(false);
   let profilesConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  let profileActionMsg = $state<{ ok: boolean; message: string } | null>(null);
+  let importingProfiles = $state(false);
+  let importInputEl = $state<HTMLInputElement | null>(null);
+
+  async function handleExportProfiles() {
+    try {
+      const json = await exportProfilesJson();
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      downloadFile(json, `omnibridge_profiles_${ts}.json`, 'application/json');
+      profileActionMsg = { ok: true, message: `✓ Exported ${profileCount} profile(s)` };
+    } catch (e) {
+      profileActionMsg = { ok: false, message: String(e) };
+    }
+  }
+
+  async function handleImportProfiles(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    importingProfiles = true;
+    profileActionMsg = null;
+    try {
+      const json = await file.text();
+      const result = await importProfilesJson(json, 'merge');
+      profileCount = result.total;
+      profileActionMsg = {
+        ok: true,
+        message: `✓ Imported ${result.imported} profile(s) — ${result.total} total`,
+      };
+      onProfilesChanged?.();
+    } catch (err) {
+      profileActionMsg = { ok: false, message: String(err) };
+    } finally {
+      importingProfiles = false;
+      input.value = '';
+    }
+  }
 
   async function handleClearProfiles() {
     if (profileCount === 0) return;
@@ -117,6 +155,7 @@
       await clearAllProfiles();
       profileCount = 0;
       profilesCleared = true;
+      onProfilesChanged?.();
       setTimeout(() => (profilesCleared = false), 2500);
     } finally {
       clearingProfiles = false;
@@ -234,6 +273,29 @@
         </div>
         <div class="actions-row">
           <button
+            class="btn secondary"
+            onclick={handleExportProfiles}
+            disabled={profileCount === 0}
+            title="Download all learned profiles as JSON"
+          >
+            Export JSON
+          </button>
+          <button
+            class="btn secondary"
+            onclick={() => importInputEl?.click()}
+            disabled={importingProfiles}
+            title="Import profiles from a JSON file (merge with existing)"
+          >
+            {importingProfiles ? 'Importing…' : 'Import JSON'}
+          </button>
+          <input
+            bind:this={importInputEl}
+            type="file"
+            accept=".json,application/json"
+            class="hidden-input"
+            onchange={handleImportProfiles}
+          />
+          <button
             class="btn ghost-danger"
             class:pending-confirm={profilesConfirmPending}
             onclick={handleClearProfiles}
@@ -251,6 +313,9 @@
             {/if}
           </button>
         </div>
+        {#if profileActionMsg}
+          <div class="test-msg" class:fail={!profileActionMsg.ok}>{profileActionMsg.message}</div>
+        {/if}
       </section>
 
       <div class="divider"></div>
@@ -480,8 +545,14 @@
 
   .actions-row {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: 0.4rem;
     margin-top: 0.5rem;
+  }
+
+  .hidden-input {
+    display: none;
   }
 
   .stat-big {

@@ -4,6 +4,19 @@ All notable changes to OmniBridge are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions use
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-08-09
+
+### Added
+- **Webhook send filter** — optionally forward only when a parsed field equals a value (e.g. `stable=ST` on scales)
+- **Webhook quick presets** — one-click templates for JSON (Zapier/n8n), legacy form POST, industrial scale, and Home Assistant
+- **Device profile export/import** — share learned protocols between machines via JSON (Settings → Learned Data)
+- **Webhook skipped counter** — tracks payloads blocked by the send filter
+- Server error bodies now appear in webhook failure messages (up to 120 chars)
+
+### Changed
+- Webhook modal placeholders generalized (no vendor-specific field names)
+- `User-Agent` bumped to `OmniBridge/0.2`
+
 ## [0.1.0] — 2026-04-27
 
 Initial release for the Claude Opus 4.7 Hackathon 2026.
@@ -67,4 +80,5 @@ Initial release for the Claude Opus 4.7 Hackathon 2026.
 - `docs/RELEASE_GUIDE.md` — how to produce signed DMG/MSI/AppImage artifacts
 - `docs/RELEASE_NOTES_0.1.0.md` — release notes for the 0.1.0 tag
 
+[0.2.0]: https://github.com/adindamochamad/omnibridge/releases/tag/v0.2.0
 [0.1.0]: https://github.com/adindamochamad/omnibridge/releases/tag/v0.1.0

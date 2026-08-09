@@ -25,6 +25,7 @@
     defaultStats,
     saveConfig as saveWebhookConfig,
     sendWebhook,
+    shouldSendWebhook,
     type WebhookConfig,
     type WebhookPayload,
     type WebhookStats,
@@ -179,10 +180,17 @@
     if (!webhookConfig?.enabled || !analysisResult) return;
     const payload = buildPayload();
     if (!payload || Object.keys(payload.fields).length === 0) return;
+
+    if (!shouldSendWebhook(webhookConfig, payload)) {
+      webhookStats = { ...webhookStats, skipped: webhookStats.skipped + 1 };
+      return;
+    }
+
     const result = await sendWebhook(webhookConfig, payload);
     webhookStats = {
       sent: webhookStats.sent + (result.ok ? 1 : 0),
       failed: webhookStats.failed + (result.ok ? 0 : 1),
+      skipped: webhookStats.skipped,
       last_status: result.ok ? `${result.status} OK` : (result.error ?? 'Error'),
       last_sent_at: Date.now(),
       last_error: result.ok ? null : (result.error ?? null),

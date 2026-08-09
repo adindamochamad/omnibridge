@@ -15,6 +15,14 @@ export type WebhookMethod = 'POST' | 'PUT' | 'PATCH';
  *    CodeIgniter `$this->input->post('scales-weight')` controller). */
 export type WebhookBodyFormat = 'json' | 'form';
 
+/** Kondisi opsional: webhook hanya dikirim jika field bernilai tertentu
+ *  (mis. stable=ST pada timbangan). */
+export interface WebhookSendFilter {
+  enabled: boolean;
+  field: string;
+  value: string;
+}
+
 export interface WebhookConfig {
   enabled: boolean;
   url: string;
@@ -23,7 +31,7 @@ export interface WebhookConfig {
   include_raw: boolean;
   custom_headers: string; // newline-separated "Key: Value"
   body_format: WebhookBodyFormat;
-  form_template: string; // e.g. "scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}"
+  form_template: string; // e.g. "scales-code={{scales_code}}&scales-weight={{weight}}"
   /** Kode timbangan untuk endpoint legacy (dropdown). */
   scales_code: string;
   /** ID perusahaan untuk endpoint legacy (dropdown). */
@@ -32,11 +40,13 @@ export interface WebhookConfig {
   entis: boolean;
   /** Mode endpoint: DEV (staging) atau ONLINE (production). */
   mode_webhook: 'DEV' | 'ONLINE';
+  send_filter: WebhookSendFilter;
 }
 
 export interface WebhookStats {
   sent: number;
   failed: number;
+  skipped: number;
   last_status: string | null;
   last_sent_at: number | null;
   last_error: string | null;
@@ -55,6 +65,10 @@ export interface WebhookPayload {
   raw_line?: { ascii: string; hex: string; timestamp: number };
 }
 
+export function defaultSendFilter(): WebhookSendFilter {
+  return { enabled: false, field: '', value: '' };
+}
+
 export function defaultConfig(): WebhookConfig {
   return konfigurasiWebhookCasDefault();
 }
@@ -64,10 +78,22 @@ export function templateFormTimbangan(): string {
   return 'scales-code={{scales_code}}&scales-weight={{weight}}&company-id={{company_id}}&entis={{entis}}';
 }
 
+/** Cek apakah payload memenuhi filter pengiriman webhook. */
+export function shouldSendWebhook(config: WebhookConfig, payload: WebhookPayload): boolean {
+  const filter = config.send_filter ?? defaultSendFilter();
+  if (!filter.enabled) return true;
+  const nama_field = filter.field.trim();
+  if (!nama_field) return true;
+  const field = payload.fields[nama_field];
+  if (!field) return false;
+  return String(field.value) === filter.value;
+}
+
 export function defaultStats(): WebhookStats {
   return {
     sent: 0,
     failed: 0,
+    skipped: 0,
     last_status: null,
     last_sent_at: null,
     last_error: null,
@@ -102,6 +128,7 @@ export async function getConfig(fingerprint: string): Promise<WebhookConfig | nu
   if (!merged.custom_headers?.trim()) merged.custom_headers = dasar.custom_headers;
   if (!merged.form_template?.trim()) merged.form_template = dasar.form_template;
   if (!merged.body_format) merged.body_format = dasar.body_format;
+  merged.send_filter = { ...defaultSendFilter(), ...(merged.send_filter ?? {}) };
   // ENTIS = saklar auto-forward; selaraskan dengan enabled
   if (stored.entis === undefined && stored.enabled) {
     merged.entis = true;
@@ -233,7 +260,7 @@ export async function sendWebhook(
 
   const headers: Record<string, string> = {
     'Content-Type': contentType,
-    'User-Agent': 'OmniBridge/0.1',
+    'User-Agent': 'OmniBridge/0.2',
     ...parseHeaders(config.custom_headers),
   };
 
@@ -252,7 +279,9 @@ export async function sendWebhook(
       ok: res.ok,
       status: res.status,
       bodyPreview: res.body_preview,
-      error: res.ok ? undefined : `HTTP ${res.status}`,
+      error: res.ok
+        ? undefined
+        : `HTTP ${res.status}${res.body_preview ? ` — ${res.body_preview.slice(0, 120)}` : ''}`,
     };
   } catch (e) {
     return { ok: false, status: null, error: String(e) };

@@ -6,11 +6,8 @@ export const URL_WEBHOOK_DEV = 'https://dev.bat.entis.app/api/scale';
 /** URL production ENTIS — dipakai otomatis saat mode ONLINE. */
 export const URL_WEBHOOK_ONLINE = 'https://bat.entis.app/api/scale';
 
-/** gs-key ENTIS untuk header webhook. */
-export const NILAI_GS_KEY = '8g0kc4skc0gc40kkgcskw40kgg0k84ssgcs4ss4w';
-
-/** Header siap pakai di modal webhook. */
-export const HEADER_CUSTOM_DEFAULT = `gs-key: ${NILAI_GS_KEY}`;
+/** Header siap pakai di modal webhook — isi gs-key Anda sendiri. */
+export const HEADER_CUSTOM_DEFAULT = 'gs-key: your-api-key-here';
 
 /**
  * Kunci API Anthropic — di-inline ke bundle saat build jika
@@ -35,5 +32,6 @@ export function konfigurasiWebhookCasDefault(): WebhookConfig {
     company_id: '2',
     entis: false,
     mode_webhook: 'DEV',
+    send_filter: { enabled: true, field: 'stable', value: 'ST' },
   };
 }

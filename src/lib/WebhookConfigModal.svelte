@@ -2,13 +2,16 @@
   import { untrack } from 'svelte';
   import {
     defaultConfig,
+    defaultSendFilter,
     sendWebhook,
     renderFormBody,
     templateFormTimbangan,
+    shouldSendWebhook,
     type WebhookConfig,
     type WebhookPayload,
     type WebhookStats,
   } from '$lib/webhook.js';
+  import { WEBHOOK_PRESETS, applyWebhookPreset } from '$lib/webhook-presets.js';
   import { formatTimestamp } from '$lib/types.js';
   import { urlEfektifUntukWebhook } from '$lib/cas-scale.js';
   import { URL_WEBHOOK_DEV, URL_WEBHOOK_ONLINE } from '$lib/konfigurasi-default-cas.js';
@@ -29,7 +32,14 @@
 
   // Draft is an editable copy of the initial config — user edits should persist,
   // so untrack() captures the starting value without triggering the warning.
-  let draft = $state<WebhookConfig>(untrack(() => config ?? defaultConfig()));
+  let draft = $state<WebhookConfig>(untrack(() => {
+    const base = config ?? defaultConfig();
+    return {
+      ...base,
+      send_filter: { ...defaultSendFilter(), ...(base.send_filter ?? {}) },
+    };
+  }));
+  let selectedPreset = $state('');
   let testing = $state(false);
   let testResult = $state<{ ok: boolean; message: string } | null>(null);
   let saving = $state(false);
@@ -53,6 +63,14 @@
       testResult = { ok: false, message: 'No sample data yet — wait for stream' };
       return;
     }
+    if (!shouldSendWebhook(draft, samplePayload)) {
+      const f = draft.send_filter;
+      testResult = {
+        ok: false,
+        message: `✗ Filter blocked — ${f.field} is not "${f.value}" in current data`,
+      };
+      return;
+    }
     testing = true;
     testResult = null;
     const r = await sendWebhook(draft, samplePayload);
@@ -68,6 +86,16 @@
   function handleBackdrop(e: MouseEvent) {
     if (e.target === e.currentTarget) onClose();
   }
+
+  function applyPreset() {
+    const preset = WEBHOOK_PRESETS.find((p) => p.id === selectedPreset);
+    if (!preset) return;
+    draft = applyWebhookPreset(draft, preset);
+  }
+
+  const filterBlocked = $derived(
+    samplePayload ? !shouldSendWebhook(draft, samplePayload) : false
+  );
 
   // Tokens the user can drop into the form template — top-level metadata plus
   // every parsed field name from the current sample.
@@ -111,6 +139,34 @@
     </header>
 
     <div class="modal-body">
+      <!-- Preset templates -->
+      <div class="field">
+        <label for="wh-preset">Quick Preset</label>
+        <div class="preset-row">
+          <select id="wh-preset" bind:value={selectedPreset}>
+            <option value="">— choose a template —</option>
+            {#each WEBHOOK_PRESETS as preset}
+              <option value={preset.id}>{preset.label}</option>
+            {/each}
+          </select>
+          <button
+            type="button"
+            class="btn-preset"
+            onclick={applyPreset}
+            disabled={!selectedPreset}
+            title="Apply preset (keeps URL and headers)"
+          >
+            Apply
+          </button>
+        </div>
+        {#if selectedPreset}
+          {@const preset = WEBHOOK_PRESETS.find((p) => p.id === selectedPreset)}
+          {#if preset}
+            <div class="preset-hint">{preset.description}</div>
+          {/if}
+        {/if}
+      </div>
+
       <!-- Enable toggle -->
       <label class="toggle-row">
         <input type="checkbox" bind:checked={draft.enabled} />
@@ -214,9 +270,50 @@
         <textarea
           id="wh-headers"
           rows="3"
-          placeholder="gs-key: your-api-key&#10;Authorization: Bearer xxx"
+          placeholder="X-API-Key: your-api-key&#10;Authorization: Bearer xxx"
           bind:value={draft.custom_headers}
         ></textarea>
+      </div>
+
+      <!-- Send filter -->
+      <div class="filter-box">
+        <label class="toggle-row compact filter-toggle">
+          <input type="checkbox" bind:checked={draft.send_filter.enabled} />
+          <span class="toggle-label">Send only when field matches</span>
+        </label>
+        {#if draft.send_filter.enabled}
+          <div class="field-row filter-fields">
+            <div class="field">
+              <label for="wh-filter-field">Field name</label>
+              <input
+                id="wh-filter-field"
+                type="text"
+                placeholder="stable"
+                bind:value={draft.send_filter.field}
+                list="wh-filter-suggestions"
+              />
+              <datalist id="wh-filter-suggestions">
+                {#each availableTokens as tok}
+                  <option value={tok}></option>
+                {/each}
+              </datalist>
+            </div>
+            <div class="field">
+              <label for="wh-filter-value">Equals</label>
+              <input
+                id="wh-filter-value"
+                type="text"
+                placeholder="ST"
+                bind:value={draft.send_filter.value}
+              />
+            </div>
+          </div>
+          {#if filterBlocked}
+            <div class="filter-warn">
+              Current data does not pass this filter — webhook will be skipped until the field matches.
+            </div>
+          {/if}
+        {/if}
       </div>
 
       <!-- Include raw -->
@@ -226,7 +323,7 @@
       </label>
 
       <!-- Stats -->
-      {#if stats.sent > 0 || stats.failed > 0}
+      {#if stats.sent > 0 || stats.failed > 0 || stats.skipped > 0}
         <div class="stats">
           <div class="stat">
             <span class="stat-value ok">{stats.sent}</span>
@@ -236,6 +333,12 @@
             <span class="stat-value fail">{stats.failed}</span>
             <span class="stat-label">failed</span>
           </div>
+          {#if stats.skipped > 0}
+            <div class="stat">
+              <span class="stat-value skip">{stats.skipped}</span>
+              <span class="stat-label">skipped</span>
+            </div>
+          {/if}
           {#if stats.last_sent_at}
             <div class="stat-last">
               Last: {stats.last_status} · {formatTimestamp(stats.last_sent_at)}
@@ -487,6 +590,72 @@
   }
 
   .stat-value.ok { color: #22c55e; }
+  .stat-value.fail { color: #f87171; }
+  .stat-value.skip { color: #f59e0b; }
+
+  .preset-row {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .preset-row select {
+    flex: 1;
+  }
+
+  .btn-preset {
+    padding: 0.4rem 0.7rem;
+    border-radius: 5px;
+    border: 1px solid #2a3450;
+    background: #1a2038;
+    color: #90a8e0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .btn-preset:hover:not(:disabled) { background: #202848; }
+  .btn-preset:disabled { opacity: 0.4; cursor: default; }
+
+  .preset-hint {
+    font-size: 0.68rem;
+    color: #5a6a8a;
+    margin-top: 0.2rem;
+    line-height: 1.4;
+  }
+
+  .filter-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    background: #0a0e1a;
+    border: 1px solid #1e2a40;
+    border-radius: 6px;
+  }
+
+  .filter-toggle {
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+
+  .filter-fields {
+    margin-top: 0.1rem;
+  }
+
+  .filter-warn {
+    font-size: 0.68rem;
+    color: #f59e0b;
+    background: #1a1408;
+    border: 1px solid #3a2e14;
+    border-radius: 4px;
+    padding: 0.35rem 0.5rem;
+    line-height: 1.4;
+  }
+
   .stat-value.fail { color: #f87171; }
 
   .stat-label {

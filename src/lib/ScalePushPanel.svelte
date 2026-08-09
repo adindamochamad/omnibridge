@@ -64,6 +64,7 @@
     onStatsChange({
       sent: stats.sent + (hasil.ok ? 1 : 0),
       failed: stats.failed + (hasil.ok ? 0 : 1),
+      skipped: stats.skipped,
       last_status: hasil.ok ? `${hasil.status} OK` : (hasil.error ?? 'Error'),
       last_sent_at: Date.now(),
       last_error: hasil.ok ? null : (hasil.error ?? null),
