@@ -29,4 +29,6 @@ tauri-plugin-store = "2.4.2"
 # subject to the WebView's CORS policy (browser fetch() hits CORS preflight).
 # rustls-tls keeps the build self-contained (no system OpenSSL) across laptops.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Safe Mode policy: compile and match hex payload patterns (M1).
+regex = "1"
 

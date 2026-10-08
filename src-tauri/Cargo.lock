@@ -2403,6 +2403,7 @@ dependencies = [
 name = "omnibridge"
 version = "0.2.2"
 dependencies = [
+ "regex",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

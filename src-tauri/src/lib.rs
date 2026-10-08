@@ -1,4 +1,5 @@
 mod discovery;
+pub mod safemode;
 
 use serde::{Deserialize, Serialize};
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
