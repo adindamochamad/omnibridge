@@ -67,7 +67,7 @@ export const AGENT_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: 'send_bytes',
     description:
-      'Send bytes TO the device (bidirectional communication). Use ONLY when you need to trigger a response to verify protocol (e.g. sending a Modbus query, requesting NMEA rate config, issuing scale tare). The bytes will be transmitted and any device response will appear in subsequent read_more_lines calls. REQUIRES active monitor on the port. Use sparingly — only 1 write per investigation unless necessary.',
+      'Send bytes TO the device (bidirectional communication). Use ONLY when you need to trigger a response to verify protocol (e.g. sending a Modbus query, requesting NMEA rate config, issuing scale tare). Requires explicit human approval in the app before any bytes are transmitted. If the operator denies or the request times out, do NOT call send_bytes again in this investigation — continue with read-only tools. REQUIRES active monitor on the port. Use sparingly.',
     input_schema: {
       type: 'object',
       properties: {

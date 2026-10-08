@@ -14,6 +14,7 @@
   import PortCard from "$lib/PortCard.svelte";
   import DataBuffer from "$lib/DataBuffer.svelte";
   import SettingsModal from "$lib/SettingsModal.svelte";
+  import ApprovalDialog from "$lib/ApprovalDialog.svelte";
   import { getAllProfiles, saveProfile, type DeviceProfile } from "$lib/profiles.js";
   import { getApiKey } from "$lib/settings.js";
   import type { ProtocolAnalysis } from "$lib/claude.js";
@@ -556,6 +557,8 @@
     {/if}
   </main>
 </div>
+
+<ApprovalDialog />
 
 {#if showSettings}
   <SettingsModal

@@ -456,6 +456,7 @@ pub fn run() {
             send_webhook_request,
             safemode::gate::safemode_begin_session,
             safemode::gate::safemode_authorize_tool,
+            safemode::gate::safemode_resolve_approval,
             safemode::gate::safemode_agent_send_bytes,
         ])
         .run(tauri::generate_context!())

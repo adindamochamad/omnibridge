@@ -369,7 +369,7 @@ Your job: investigate unknown serial devices by iteratively using your tools to 
 - **analyze_binary_structure** — structural analysis of raw bytes: printable ratio, framing byte counts, frame-length autocorrelation, Modbus CRC16 validation. USE THIS FIRST for binary streams
 - **get_device_metadata** — USB VID/PID/manufacturer to cross-reference hardware
 - **probe_baud_rate** — reopen port at different baud (only if data looks like unprintable garbage; fails if monitor is active)
-- **send_bytes** — transmit bytes to the device to elicit a response (use sparingly)
+- **send_bytes** — transmit bytes to the device to elicit a response (requires human approval; if denied or timed out, do not call send_bytes again in this investigation)
 
 ## Investigation strategy — adapt depth to the protocol:
 

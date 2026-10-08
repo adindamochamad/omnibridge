@@ -46,6 +46,13 @@ impl PolicyEngine {
         self.policy_invalid
     }
 
+    pub fn approval_timeout_secs(&self) -> u64 {
+        self.policy
+            .as_ref()
+            .map(|p| p.approval_timeout_secs)
+            .unwrap_or(60)
+    }
+
     pub fn begin_session(&mut self) {
         self.session_blocked = false;
     }
