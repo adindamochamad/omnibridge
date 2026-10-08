@@ -32,7 +32,7 @@ jobs:
         run: npm run build
 
   rust:
-    name: Rust backend (fmt + clippy + check)
+    name: Rust backend (fmt + clippy + check + test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,3 +73,7 @@ jobs:
       - name: cargo check
         working-directory: src-tauri
         run: cargo check --all-targets
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --all-targets

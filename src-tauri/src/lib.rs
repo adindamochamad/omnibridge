@@ -1,12 +1,12 @@
 mod discovery;
 
 use serde::{Deserialize, Serialize};
+use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
-use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PortDataEvent {
@@ -56,7 +56,10 @@ fn kandidat_port_macos(nama_port: &str) -> Vec<String> {
     daftar_port
 }
 
-fn buka_port_dengan_konfigurasi(nama_port: &str, baud_rate: u32) -> Result<Box<dyn SerialPort>, String> {
+fn buka_port_dengan_konfigurasi(
+    nama_port: &str,
+    baud_rate: u32,
+) -> Result<Box<dyn SerialPort>, String> {
     let mut daftar_error: Vec<String> = Vec::new();
     for kandidat_port in kandidat_port_macos(nama_port) {
         let hasil_buka = serialport::new(&kandidat_port, baud_rate)
@@ -221,6 +224,17 @@ fn send_bytes_to_port(
 
 fn is_printable_byte(b: u8) -> bool {
     (0x20..=0x7E).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t'
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_printable_byte;
+
+    #[test]
+    fn is_printable_byte_treats_ascii_space_as_printable() {
+        assert!(is_printable_byte(b' '));
+        assert!(!is_printable_byte(0x1F));
+    }
 }
 
 fn probe_single_sync(port: &str, baud: u32) -> BaudProbeResult {

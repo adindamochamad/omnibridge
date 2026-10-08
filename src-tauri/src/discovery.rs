@@ -81,9 +81,7 @@ pub fn list_devices() -> Vec<DiscoveredDevice> {
     // di available_ports(), tapi nodenya tetap ada di /dev.
     for perangkat in daftar_port_fallback_macos() {
         let kunci_port = kunci_pasangan_port(&perangkat.port);
-        if !perangkat_terpilih.contains_key(&kunci_port) {
-            perangkat_terpilih.insert(kunci_port, perangkat);
-        }
+        perangkat_terpilih.entry(kunci_port).or_insert(perangkat);
     }
 
     let mut hasil: Vec<DiscoveredDevice> = perangkat_terpilih.into_values().collect();
@@ -126,7 +124,7 @@ fn daftar_port_fallback_macos() -> Vec<DiscoveredDevice> {
             });
         }
 
-        return daftar_perangkat;
+        daftar_perangkat
     }
 
     #[cfg(not(target_os = "macos"))]
