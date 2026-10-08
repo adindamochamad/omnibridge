@@ -6,8 +6,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "serialplugin:default",
-    "serialplugin:allow-available-ports",
     "store:default"
   ]
 }

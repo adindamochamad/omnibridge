@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { invoke } from '@tauri-apps/api/core';
 import { getApiKey } from './settings.js';
 import { AGENT_TOOLS, executeTool, type ToolContext } from './agent-tools.js';
 import type { DataLine, DiscoveredDevice } from './types.js';
@@ -563,6 +564,12 @@ export async function analyzeWithAgent(
   let apiCalls = 0;
   const usage = emptyUsage();
 
+  try {
+    await invoke('safemode_begin_session');
+  } catch {
+    // Safe Mode not available outside the desktop shell (e.g. vitest).
+  }
+
   function emit(step: Omit<AgentStep, 'id' | 'timestamp'>): AgentStep {
     const full: AgentStep = {
       id: `step-${trace.length}`,
@@ -680,7 +687,8 @@ Use your tools to investigate as needed. Begin investigation now.`;
         const output = await executeTool(
           tu.name,
           tu.input as Record<string, unknown>,
-          toolCtx
+          toolCtx,
+          tu.id
         );
         emit({ type: 'tool_result', tool_name: tu.name, tool_output: output });
         toolResults.push({

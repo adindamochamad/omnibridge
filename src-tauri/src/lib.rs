@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PortDataEvent {
@@ -28,12 +28,34 @@ struct BaudProbeResult {
     error: Option<String>,
 }
 
-struct PortRegistration {
+pub(crate) struct PortRegistration {
     active: bool,
     write_tx: Sender<Vec<u8>>,
 }
 
-type MonitorRegistry = Arc<Mutex<HashMap<String, PortRegistration>>>;
+pub(crate) type MonitorRegistry = Arc<Mutex<HashMap<String, PortRegistration>>>;
+
+pub(crate) fn write_to_port(
+    registry: &MonitorRegistry,
+    port: &str,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    if data.is_empty() {
+        return Err("Cannot send empty payload".into());
+    }
+    let map = registry.lock().map_err(|e| e.to_string())?;
+    let state = map
+        .get(port)
+        .ok_or_else(|| format!("{} is not being monitored", port))?;
+    if !state.active {
+        return Err(format!("{} monitor is not active", port));
+    }
+    state
+        .write_tx
+        .send(data)
+        .map_err(|e| format!("Write channel closed: {}", e))?;
+    Ok(())
+}
 
 fn is_active(registry: &MonitorRegistry, port: &str) -> bool {
     registry
@@ -206,21 +228,7 @@ fn send_bytes_to_port(
     port: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
-    if data.is_empty() {
-        return Err("Cannot send empty payload".into());
-    }
-    let map = registry.lock().map_err(|e| e.to_string())?;
-    let state = map
-        .get(&port)
-        .ok_or_else(|| format!("{} is not being monitored", port))?;
-    if !state.active {
-        return Err(format!("{} monitor is not active", port));
-    }
-    state
-        .write_tx
-        .send(data)
-        .map_err(|e| format!("Write channel closed: {}", e))?;
-    Ok(())
+    write_to_port(registry.inner(), &port, data)
 }
 
 fn is_printable_byte(b: u8) -> bool {
@@ -229,12 +237,54 @@ fn is_printable_byte(b: u8) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_printable_byte;
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::mpsc::channel;
 
     #[test]
     fn is_printable_byte_treats_ascii_space_as_printable() {
         assert!(is_printable_byte(b' '));
         assert!(!is_printable_byte(0x1F));
+    }
+
+    #[test]
+    fn write_to_port_delivers_bytes_to_channel() {
+        let registry: MonitorRegistry = Arc::new(Mutex::new(HashMap::new()));
+        let (write_tx, write_rx) = channel::<Vec<u8>>();
+        registry.lock().unwrap().insert(
+            "ttyTEST".into(),
+            PortRegistration {
+                active: true,
+                write_tx,
+            },
+        );
+        write_to_port(&registry, "ttyTEST", vec![1, 2, 3]).unwrap();
+        assert_eq!(write_rx.recv().unwrap(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn write_to_port_errors_unchanged() {
+        let registry: MonitorRegistry = Arc::new(Mutex::new(HashMap::new()));
+        assert_eq!(
+            write_to_port(&registry, "ttyX", vec![]).unwrap_err(),
+            "Cannot send empty payload"
+        );
+        assert_eq!(
+            write_to_port(&registry, "ttyX", vec![1]).unwrap_err(),
+            "ttyX is not being monitored"
+        );
+        let (write_tx, _) = channel::<Vec<u8>>();
+        registry.lock().unwrap().insert(
+            "ttyY".into(),
+            PortRegistration {
+                active: false,
+                write_tx,
+            },
+        );
+        assert_eq!(
+            write_to_port(&registry, "ttyY", vec![1]).unwrap_err(),
+            "ttyY monitor is not active"
+        );
     }
 }
 
@@ -385,6 +435,15 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(registry)
+        .setup(|app| {
+            let policy_path = app
+                .path()
+                .app_config_dir()
+                .map_err(|e| e.to_string())?
+                .join("safemode-policy.json");
+            app.manage(safemode::gate::init_state(&policy_path));
+            Ok(())
+        })
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_opener::init())
@@ -395,6 +454,9 @@ pub fn run() {
             probe_single_baud,
             send_bytes_to_port,
             send_webhook_request,
+            safemode::gate::safemode_begin_session,
+            safemode::gate::safemode_authorize_tool,
+            safemode::gate::safemode_agent_send_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

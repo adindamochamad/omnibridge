@@ -1,6 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import agentToolsSource from '../src/lib/agent-tools.ts?raw';
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from '@tauri-apps/api/core';
 import { executeTool, type ToolContext } from '../src/lib/agent-tools.js';
 import type { DataLine } from '../src/lib/types.js';
+
+const TOOL_USE_ID = 'toolu_test_01';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    if (cmd === 'safemode_authorize_tool') {
+      return { allowed: true };
+    }
+    throw new Error(`unexpected invoke: ${cmd}`);
+  });
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -53,7 +72,7 @@ describe('analyze_binary_structure — Modbus RTU', () => {
       lines.push(bytesToDataLine(buildModbusFrame(regs), i + 1));
     }
     const ctx: ToolContext = { port: 'test', lines, device: null };
-    const raw = await executeTool('analyze_binary_structure', { hypothesis: 'testing' }, ctx);
+    const raw = await executeTool('analyze_binary_structure', { hypothesis: 'testing' }, ctx, TOOL_USE_ID);
     const parsed = JSON.parse(raw);
 
     expect(parsed.frame_analysis).toBeTruthy();
@@ -68,7 +87,7 @@ describe('analyze_binary_structure — Modbus RTU', () => {
   it('returns error when buffer too small', async () => {
     const lines = [bytesToDataLine([0x01, 0x02, 0x03])];
     const ctx: ToolContext = { port: 'test', lines, device: null };
-    const raw = await executeTool('analyze_binary_structure', { hypothesis: 'x' }, ctx);
+    const raw = await executeTool('analyze_binary_structure', { hypothesis: 'x' }, ctx, TOOL_USE_ID);
     const parsed = JSON.parse(raw);
     expect(parsed.error).toMatch(/Not enough bytes/);
   });
@@ -81,7 +100,7 @@ describe('analyze_binary_structure — Modbus RTU', () => {
       lines.push(bytesToDataLine(bytes, i + 1));
     }
     const ctx: ToolContext = { port: 'test', lines, device: null };
-    const raw = await executeTool('analyze_binary_structure', { hypothesis: 'x' }, ctx);
+    const raw = await executeTool('analyze_binary_structure', { hypothesis: 'x' }, ctx, TOOL_USE_ID);
     const parsed = JSON.parse(raw);
     expect(parsed.printable_ratio).toBeGreaterThan(0.9);
     expect(parsed.is_likely_binary).toBe(false);
@@ -101,7 +120,8 @@ describe('search_pattern', () => {
     const raw = await executeTool(
       'search_pattern',
       { regex: 'temp=[\\d.]+', purpose: 'verify' },
-      ctx
+      ctx,
+      TOOL_USE_ID
     );
     const parsed = JSON.parse(raw);
     expect(parsed.total_matches).toBe(2);
@@ -112,7 +132,8 @@ describe('search_pattern', () => {
     const raw = await executeTool(
       'search_pattern',
       { regex: '(a+)+b', purpose: 'attack' },
-      emptyCtx
+      emptyCtx,
+      TOOL_USE_ID
     );
     const parsed = JSON.parse(raw);
     expect(parsed.error).toMatch(/ReDoS|nested/i);
@@ -122,7 +143,8 @@ describe('search_pattern', () => {
     const raw = await executeTool(
       'search_pattern',
       { regex: 'a'.repeat(400), purpose: 'overflow' },
-      emptyCtx
+      emptyCtx,
+      TOOL_USE_ID
     );
     const parsed = JSON.parse(raw);
     expect(parsed.error).toMatch(/too long/);
@@ -137,7 +159,7 @@ describe('read_more_lines', () => {
       bytesToDataLine([0x41 + i, 0x42, 0x43], i + 1)
     );
     const ctx: ToolContext = { port: 'test', lines, device: null };
-    const raw = await executeTool('read_more_lines', { count: 10 }, ctx);
+    const raw = await executeTool('read_more_lines', { count: 10 }, ctx, TOOL_USE_ID);
     const parsed = JSON.parse(raw);
     expect(parsed.returned).toBe(5);
     expect(parsed.total_buffer_size).toBe(5);
@@ -149,8 +171,72 @@ describe('read_more_lines', () => {
       bytesToDataLine([0x41], i + 1)
     );
     const ctx: ToolContext = { port: 'test', lines, device: null };
-    const raw = await executeTool('read_more_lines', { count: 999 }, ctx);
+    const raw = await executeTool('read_more_lines', { count: 999 }, ctx, TOOL_USE_ID);
     const parsed = JSON.parse(raw);
     expect(parsed.returned).toBe(100);
+  });
+});
+
+// ── Safe Mode gate (send_bytes) ────────────────────────────────────────────
+
+describe('send_bytes — Safe Mode gate', () => {
+  it('does not reference send_bytes_to_port in agent-tools source', () => {
+    expect(agentToolsSource.includes('send_bytes_to_port')).toBe(false);
+  });
+
+  it('returns do_not_retry when the gate blocks the write', async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === 'safemode_authorize_tool') {
+        return { allowed: true };
+      }
+      if (cmd === 'safemode_agent_send_bytes') {
+        return {
+          ok: false,
+          blocked: true,
+          reason: 'needs_approval',
+          retry: 'do_not_retry',
+        };
+      }
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const raw = await executeTool(
+      'send_bytes',
+      { hex: '1B 54', purpose: 'test write' },
+      emptyCtx,
+      TOOL_USE_ID
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.blocked).toBe(true);
+    expect(parsed.retry).toBe('do_not_retry');
+    expect(vi.mocked(invoke).mock.calls.some((c) => c[0] === 'send_bytes_to_port')).toBe(
+      false
+    );
+  });
+
+  it('propagates authorize denial without calling send gate', async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === 'safemode_authorize_tool') {
+        return {
+          allowed: false,
+          blocked: true,
+          reason: 'policy_denied:unknown_tool',
+          retry: 'do_not_retry',
+        };
+      }
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const raw = await executeTool(
+      'send_bytes',
+      { hex: '1B 54', purpose: 'test' },
+      emptyCtx,
+      TOOL_USE_ID
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.retry).toBe('do_not_retry');
+    expect(vi.mocked(invoke).mock.calls.some((c) => c[0] === 'safemode_agent_send_bytes')).toBe(
+      false
+    );
   });
 });

@@ -1,5 +1,6 @@
 pub mod approval;
 pub mod audit;
+pub mod gate;
 pub mod policy;
 pub mod rate_limit;
 

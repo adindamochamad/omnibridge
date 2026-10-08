@@ -112,12 +112,49 @@ export interface ToolContext {
 
 type ToolInput = Record<string, unknown>;
 
+interface SafemodeAuthorizeResult {
+  allowed: boolean;
+  blocked?: boolean;
+  reason?: string;
+  retry?: string;
+  message?: string;
+}
+
+interface SafemodeAgentSendResult {
+  ok: boolean;
+  blocked?: boolean;
+  simulated?: boolean;
+  bytes_sent?: number;
+  reason?: string;
+  retry?: string;
+  message?: string;
+}
+
+function summarizeToolInput(input: ToolInput): string {
+  return JSON.stringify(input).slice(0, 500);
+}
+
 export async function executeTool(
   name: string,
   input: ToolInput,
-  ctx: ToolContext
+  ctx: ToolContext,
+  toolUseId: string
 ): Promise<string> {
   try {
+    const auth = await invoke<SafemodeAuthorizeResult>('safemode_authorize_tool', {
+      toolName: name,
+      inputSummary: summarizeToolInput(input),
+    });
+    if (!auth.allowed) {
+      return JSON.stringify({
+        ok: false,
+        blocked: auth.blocked ?? true,
+        reason: auth.reason ?? 'denied',
+        retry: auth.retry ?? 'do_not_retry',
+        message: auth.message,
+      });
+    }
+
     switch (name) {
       case 'read_more_lines': {
         const rawCount = typeof input.count === 'number' ? input.count : 20;
@@ -214,14 +251,21 @@ export async function executeTool(
           return JSON.stringify({ error: 'payload too large (max 256 bytes for agent sends)' });
         }
         try {
-          await invoke('send_bytes_to_port', { port: ctx.port, data });
+          const gate = await invoke<SafemodeAgentSendResult>('safemode_agent_send_bytes', {
+            port: ctx.port,
+            data,
+            reason: String(input.purpose ?? ''),
+            toolUseId,
+          });
+          if (!gate.ok) {
+            return JSON.stringify(gate);
+          }
           const before = ctx.lines.length;
-          // Wait a moment for device to respond
           await new Promise((r) => setTimeout(r, 600));
           const newLines = ctx.lines.slice(before);
           return JSON.stringify({
             ok: true,
-            bytes_sent: data.length,
+            bytes_sent: gate.bytes_sent ?? data.length,
             response_lines_captured: newLines.length,
             response_preview: newLines.slice(0, 5).map((l) => ({ ascii: l.ascii, hex: l.hex })),
           });
