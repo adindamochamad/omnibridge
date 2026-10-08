@@ -1,75 +1,71 @@
-# Safe Mode — repo notes (M0)
+# Safe Mode — repo notes
 
-Verified against **HEAD** `075b35ea01b437fcdcea97f8c6118be73c6f71bf` (same baseline as PRD v2 §2.1). Line numbers below refer to this commit.
+Last verified on the **current working tree** after M3 (Safe Mode gate + approval). Baseline PRD commit was `075b35e`; line numbers below are from the post-M3 tree and drift with edits.
 
-Locked implementation decisions live in [omnibridge-safe-mode-plan.md](./omnibridge-safe-mode-plan.md). Full PRD copy: [omnibridge-safe-mode-prd.md](./omnibridge-safe-mode-prd.md).
+Locked decisions: [omnibridge-safe-mode-plan.md](./omnibridge-safe-mode-plan.md). PRD copy: [omnibridge-safe-mode-prd.md](./omnibridge-safe-mode-prd.md).
 
-## §2.1 fact table (current line numbers)
+## §2.1 fact table (post-M3 line numbers)
 
 | Area | Fact (file:lines) |
 |------|---------------------|
-| Stack | Tauri **2.10.3** (`src-tauri/Cargo.lock`). SvelteKit 2 + Svelte 5 + `@sveltejs/adapter-static` (`package.json`). TypeScript **~5.6.2**, Vite **^6.0.3**. App version **0.2.3** in `package.json` **0.2.2** in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (mismatch — leave as-is per PRD). |
-| Rust deps | `src-tauri/Cargo.toml`: `tauri`, `tauri-plugin-opener`, `tauri-plugin-serialplugin` 2.22.0, `tauri-plugin-store` 2.4.2, `serialport` 4.9.0, `serde`, `serde_json`, `reqwest` 0.12 (rustls). **No direct `tokio`, no SQLite, no `[dev-dependencies]`** in manifest (`tokio` is transitive via Tauri in `Cargo.lock`). |
-| Rust layout | `src-tauri/src/lib.rs`, `discovery.rs`, `main.rs`. Commands: `discover_devices` (L79–82), `start_port_monitor` (L84–197), `send_bytes_to_port` (L199–220), `probe_single_baud` (L292–311), `stop_port_monitor` (L313–323), `send_webhook_request` (L337–365). Registered in `run()` `generate_handler!` **L376–383**. State: `MonitorRegistry = Arc<Mutex<HashMap<String, PortRegistration>>>` (L35), `.manage(registry)` L372. |
-| Serial write path | `send_bytes_to_port` pushes `Vec<u8>` on mpsc channel (L215–218). Monitor thread in `start_port_monitor` (spawn L113): `write_all` + `flush` L135–137, emits `port:data` with `direction: "tx"` L143–151. |
-| Agent tools | `src/lib/agent-tools.ts`: `AGENT_TOOLS` six tools L7–101; `send_bytes` L67–85 (`hex`, `purpose`). |
-| Tool dispatch | `executeTool` L115–…; `send_bytes` case **L204–231** calls `invoke('send_bytes_to_port', …)` **with no approval** (L217). 600 ms wait L220. |
-| Agent loop | `analyzeWithAgent` `src/lib/claude.ts` **L545+**. Anthropic SDK in WebView `dangerouslyAllowBrowser: true` L145; model `claude-opus-4-7` L609; `MAX_AGENT_STEPS = 8` L543. Tool loop **L679–691** — `executeTool(tu.name, tu.input, toolCtx)` **does not pass `tu.id` yet** (M2.3). `SYSTEM_PROMPT_AGENT` L361+. Started from `DataBuffer.svelte` **L384** (“Investigate” UI L452–457). |
-| Other writes | Human **Command Sender** `src/lib/CommandSender.svelte` **L83** → `send_bytes_to_port`. `probe_single_baud` opens port read-only in `probe_single_sync` (`lib.rs` L226+) — can affect DTR on some boards. |
-| Capabilities | `src-tauri/capabilities/default.json`: `serialplugin:default`, `serialplugin:allow-available-ports`, plus `core:default`, `opener:default`, `store:default`. |
-| Frontend shell | Single page `src/routes/+page.svelte`. Uses `listen` from `@tauri-apps/api/event` L4, L262+. Store: `@tauri-apps/plugin-store` in `settings.ts`, `webhook.ts`, `profiles.ts`, `bundled-presets.ts`. |
-| Demo mode | `src/lib/demo.ts`: virtual ports `demo://<id>` (e.g. L160–170). Demo monitor started in `+page.svelte` `startDemoMonitor` L202+. Demo ports are **not** in Rust `MonitorRegistry`; `send_bytes_to_port` on demo returns “not being monitored”. |
-| Tests / CI | Vitest 4 `vitest.config.ts` — `tests/**/*.test.ts`, `environment: 'node'`. Suites: `parser`, `profiles`, `agent-tools`, `webhook`, `cas-scale`. **No Svelte component tests.** Rust: M0 adds `#[cfg(test)]` in `lib.rs`. `.github/workflows/ci.yml`: `npm run check`, `npm test`, `npm run build`; `cargo fmt`, `clippy -D warnings`, `cargo check`, **`cargo test`** (M0). |
-| CSP | `src-tauri/tauri.conf.json` L22–24: `"csp": null`. |
+| Stack | Tauri **2.10.3** (`src-tauri/Cargo.lock`). SvelteKit 2 + Svelte 5 + `@sveltejs/adapter-static`. TypeScript **~5.6.2**, Vite **^6.0.3**. Version **0.2.3** (`package.json`) vs **0.2.2** (`src-tauri/Cargo.toml`, `tauri.conf.json`) — leave mismatch per PRD. |
+| Rust deps | `tauri`, `tauri-plugin-opener`, `tauri-plugin-serialplugin` 2.22.0, `tauri-plugin-store`, `serialport` 4.9.0, `serde`, `serde_json`, `reqwest` 0.12 (rustls), **`regex`** (Safe Mode policy). No direct `tokio`; approval wait uses `std::sync::mpsc` + `tauri::async_runtime::spawn_blocking`. No SQLite, no `[dev-dependencies]` in manifest. |
+| Rust layout | `lib.rs`, `discovery.rs`, `main.rs`, **`safemode/`** (`mod.rs`, `policy.rs`, `rate_limit.rs`, `approval.rs`, **`gate.rs`**, `audit.rs` stub). |
+| Serial write path | Shared **`write_to_port`** `lib.rs` **L38–56**. Human command **`send_bytes_to_port`** **L226–232** → `write_to_port`. Monitor thread TX `port:data` direction `tx` unchanged. |
+| Tauri commands | `discover_devices`, `start_port_monitor`, `stop_port_monitor`, `probe_single_baud`, `send_bytes_to_port`, `send_webhook_request`, **`safemode_begin_session`**, **`safemode_authorize_tool`**, **`safemode_resolve_approval`**, **`safemode_agent_send_bytes`** (async). Registered **`generate_handler!`** **L450–461**. State: `MonitorRegistry` + **`SafeModeState`** (policy path in `.setup()` **L438–445**). |
+| Agent tools | `src/lib/agent-tools.ts`: six tools; **`executeTool(name, input, ctx, toolUseId)`** **L137**. Every tool: **`safemode_authorize_tool`** first. **`send_bytes`** **L241+** → **`safemode_agent_send_bytes`** **L254** (not `send_bytes_to_port`). |
+| Agent loop | `analyzeWithAgent` `claude.ts`: **`safemode_begin_session`** **~L568**; tool loop passes **`tu.id`** to `executeTool` **~L687–691**. SDK in WebView; model `claude-opus-4-7`; `MAX_AGENT_STEPS = 8`. Investigate from `DataBuffer.svelte`. |
+| Approval UI | `ApprovalDialog.svelte` on `+page.svelte`; listens **`safemode:approval_requested`**; calls **`safemode_resolve_approval`**. Helpers `src/lib/safemode.ts`. |
+| Other writes | **Command Sender** → `send_bytes_to_port` (human, not gated in v1). `probe_single_baud` uses `serialport` read path in `lib.rs`. |
+| Capabilities | [`default.json`](../../src-tauri/capabilities/default.json): **`core:default`**, **`opener:default`**, **`store:default`** only — **`serialplugin:*` removed** (M2.4). **`tauri_plugin_serialplugin::init()`** still in `lib.rs` **~L448**; discovery/monitor use **`serialport`** crate, not plugin JS API (`rg serialplugin src` → empty). |
+| Demo mode | `demo://` ports in frontend; gate returns **`simulated: true`** after policy + human approve (no Rust registry write). |
+| Tests / CI | Vitest: `parser`, `profiles`, `agent-tools`, `webhook`, `cas-scale`, **`safemode`**. Rust: policy/gate/approval tests in `src-tauri/src/safemode/`, `write_to_port` tests in `lib.rs`. CI: `cargo fmt`, clippy `-D warnings`, **`cargo test`**, `npm run check`, `npm test`, `npm run build`. |
+| CSP | `tauri.conf.json`: `"csp": null`. |
 
-## Differences from PRD §2.1 text (not guesses)
+## Differences from original M0 snapshot
 
-| PRD claim | At HEAD |
-|-----------|---------|
-| No frontend import of serialplugin JS API | Still true: `rg serialplugin src` → **no matches**. |
-| (Not listed in §2.1) | `package.json` **dependencies** include `tauri-plugin-serialplugin` ^2.17.1 — unused by `src/` imports; npm lock may pull it for tooling only. |
-| `executeTool` passes context only | Confirmed — **`toolUseId` not wired** until M2.3. |
-| Line numbers from `075b35e` | HEAD **is** `075b35e`; numbers above re-checked on working tree at M0. |
+| Topic | M0 / PRD §2.1 | Post-M3 |
+|-------|----------------|---------|
+| Agent `send_bytes` | Direct `send_bytes_to_port` | Gated `safemode_agent_send_bytes` + approval dialog |
+| `toolUseId` | Not wired | `tu.id` → gate |
+| Capabilities | `serialplugin:default` + `allow-available-ports` | Removed; plugin `init()` remains |
+| Safe Mode modules | Not present | `safemode/*` + `gate.rs` |
 
-## M0.2 — `serialplugin` usage
+## M0.2 — `serialplugin` (reconfirmed after M2.4)
 
-**Command run:** `rg serialplugin src` → **no matches** (no TypeScript/Svelte use of the plugin JS API).
+- **Frontend:** no `serialplugin` imports under `src/`.
+- **Discovery / monitor / probe / Command Sender:** `serialport` + Tauri commands; writes via `write_to_port` / `send_bytes_to_port`.
+- **`init()`:** still registered; dropping it not validated in this session.
+- **Capabilities:** narrowed as above; no `serialplugin` permission grants.
 
-**Discovery and I/O:** Device listing uses the **`serialport`** crate only — `discovery.rs` L64 `serialport::available_ports()`. Port monitor, write channel, and baud probe use **`serialport`** in `lib.rs` (`buka_port_dengan_konfigurasi`, monitor thread). They do **not** call `tauri-plugin-serialplugin` APIs from Rust application code beyond plugin registration.
+## M0.3 — module layout in use
 
-**`tauri_plugin_serialplugin::init()`** (`lib.rs` L374): plugin is loaded at startup. **M0 does not remove it** (per plan). Whether `init()` can be dropped entirely is a **M2.4** question (after narrowing capabilities); not proven at M0.
+Approved M0 list **plus** (intentional; not in original M0 bullet list):
 
-**`serialplugin:allow-available-ports`:** No frontend caller found. Likely redundant if listing stays on `serialport::available_ports()`; narrowing is **M2.4**, not M0.
+- **`src-tauri/src/safemode/gate.rs`** — Tauri commands, `SafeModeState`, policy/approval wiring, `write_to_port` after approve.
 
-**`serialplugin:default`:** Grants plugin default permissions including write/open paths the WebView does not use today. Safe Mode M2.4 should narrow based on this evidence.
+Unchanged roles:
 
-## M0.3 — approved module layout
+- `mod.rs` — `PolicyEngine`
+- `policy.rs`, `rate_limit.rs`, `approval.rs` — store + pending map (`take` / send bool outside outer mutex from command)
+- `audit.rs` — stub (M4)
+- `src/lib/safemode.ts`, `ApprovalDialog.svelte`; `AuditLogPanel.svelte` — not yet (M4)
 
-Same as [omnibridge-safe-mode-plan.md](./omnibridge-safe-mode-plan.md) § “Layout yang disetujui”:
+Policy: `<app_config_dir>/safemode-policy.json`. Audit (planned): `<app_data_dir>/safemode-audit.jsonl`.
 
-- `src-tauri/src/safemode/mod.rs`
-- `src-tauri/src/safemode/policy.rs`
-- `src-tauri/src/safemode/rate_limit.rs`
-- `src-tauri/src/safemode/approval.rs`
-- `src-tauri/src/safemode/audit.rs`
-- `src/lib/safemode.ts`
-- `src/lib/ApprovalDialog.svelte`
-- `src/lib/AuditLogPanel.svelte`
+## Manual regression checklist
 
-Policy path: `<app_config_dir>/safemode-policy.json`. Audit: `<app_data_dir>/safemode-audit.jsonl`. Safe Mode enabled state in Rust, default **on**.
+**Not run on real hardware in the session that updated this file.** Fill pass/fail when verified locally.
 
-## Manual regression checklist (use after M2 and M5)
-
-Record pass/fail and date when run on real hardware where noted.
-
-| Feature | M2 | M5 | Notes |
+| Feature | M2 | M3 | Notes |
 |---------|----|----|-------|
-| Device discovery | | | |
+| Device discovery | | | `discover_devices` / `serialport` |
 | Start/stop port monitor | | | |
 | RX `port:data` display | | | |
-| Command Sender write | | | |
+| Command Sender write | | | `send_bytes_to_port` |
 | Baud probe (port not monitored) | | | |
 | Webhook forward | | | |
 | Demo virtual port | | | |
 | One-shot analysis | | | |
-| Agent Investigate (pre–Safe Mode gate: direct write) | | | After M2: gated path only |
+| Agent Investigate + Safe Mode gate | | | Approve/Deny dialog; no silent agent write |
+| Approval timeout / queue | | | Two requests one dialog at a time |

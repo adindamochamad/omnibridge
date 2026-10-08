@@ -268,6 +268,7 @@ pub(crate) fn execute_agent_send_plan(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn finish_after_approval(
     outcome: ApprovalOutcome,
     engine: &mut PolicyEngine,
@@ -333,8 +334,13 @@ pub fn safemode_resolve_approval(
     id: String,
     approve: bool,
 ) -> Result<(), String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.approvals.resolve(&id, approve);
+    let sender = {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.approvals.take(&id)
+    };
+    if let Some(tx) = sender {
+        let _ = tx.send(approve);
+    }
     Ok(())
 }
 
@@ -393,12 +399,35 @@ pub async fn safemode_agent_send_bytes(
 
             let outcome = wait_for_approval(rx, timeout_ms).await?;
 
-            let response = {
+            if outcome == ApprovalOutcome::Timeout {
                 let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-                if outcome == ApprovalOutcome::Timeout {
-                    inner.approvals.cancel(&approval_id);
+                inner.approvals.cancel(&approval_id);
+            }
+
+            let response = match outcome {
+                ApprovalOutcome::Approved if is_demo => simulated_send_response(data.len()),
+                ApprovalOutcome::Approved => match write_to_port(&reg, &port, data.to_vec()) {
+                    Ok(()) => success_send_response(data.len()),
+                    Err(e) => AgentSendBytesResponse {
+                        ok: false,
+                        blocked: None,
+                        simulated: None,
+                        bytes_sent: None,
+                        reason: Some("write_error".to_string()),
+                        retry: None,
+                        message: Some(e),
+                    },
+                },
+                ApprovalOutcome::Denied => {
+                    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+                    inner.engine.record_denied();
+                    denied_by_user_response()
                 }
-                finish_after_approval(outcome, &mut inner.engine, &reg, &port, &data, is_demo)
+                ApprovalOutcome::Timeout => {
+                    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+                    inner.engine.record_denied();
+                    timeout_response()
+                }
             };
 
             Ok(response)
@@ -512,5 +541,98 @@ mod tests {
         );
         assert_eq!(resp.reason.as_deref(), Some("denied_by_user"));
         assert_eq!(resp.retry.as_deref(), Some("do_not_retry"));
+    }
+
+    fn registry_with_write_channel() -> (MonitorRegistry, std::sync::mpsc::Receiver<Vec<u8>>) {
+        let registry: MonitorRegistry = std::sync::Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let (write_tx, write_rx) = channel::<Vec<u8>>();
+        registry.lock().unwrap().insert(
+            "ttyTEST".into(),
+            crate::PortRegistration {
+                active: true,
+                write_tx,
+            },
+        );
+        (registry, write_rx)
+    }
+
+    #[test]
+    fn timeout_finish_skips_writer() {
+        let (registry, write_rx) = registry_with_write_channel();
+        let mut engine = engine_send_bytes_needs_approval();
+        let resp = finish_after_approval(
+            ApprovalOutcome::Timeout,
+            &mut engine,
+            &registry,
+            "ttyTEST",
+            &[0x1B, 0x54],
+            false,
+        );
+        assert_eq!(resp.reason.as_deref(), Some("timeout"));
+        assert!(write_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn late_take_after_cancel_does_not_write() {
+        use crate::safemode::approval::ApprovalStore;
+
+        let mut store = ApprovalStore::default();
+        let (event, _rx) = store.register(
+            "ttyTEST".into(),
+            "1B 54".into(),
+            "·T".into(),
+            "r".into(),
+            "tu1".into(),
+            0,
+        );
+        store.cancel(&event.id);
+        assert!(store.take(&event.id).is_none());
+
+        let (registry, write_rx) = registry_with_write_channel();
+        let mut engine = engine_send_bytes_needs_approval();
+        let resp = finish_after_approval(
+            ApprovalOutcome::Timeout,
+            &mut engine,
+            &registry,
+            "ttyTEST",
+            &[0x1B, 0x54],
+            false,
+        );
+        assert_eq!(resp.reason.as_deref(), Some("timeout"));
+        assert!(write_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn double_take_allows_single_writer() {
+        use crate::safemode::approval::ApprovalStore;
+        use std::time::Duration as StdDuration;
+
+        let mut store = ApprovalStore::default();
+        let (event, rx) = store.register(
+            "ttyTEST".into(),
+            "1B 54".into(),
+            "·T".into(),
+            "r".into(),
+            "tu1".into(),
+            0,
+        );
+        let tx = store.take(&event.id).expect("first take");
+        assert!(store.take(&event.id).is_none());
+        tx.send(true).unwrap();
+        assert_eq!(rx.recv_timeout(StdDuration::from_millis(50)), Ok(true));
+
+        let (registry, write_rx) = registry_with_write_channel();
+        let mut engine = engine_send_bytes_needs_approval();
+        let resp = finish_after_approval(
+            ApprovalOutcome::Approved,
+            &mut engine,
+            &registry,
+            "ttyTEST",
+            &[0x1B, 0x54],
+            false,
+        );
+        assert!(resp.ok);
+        assert_eq!(write_rx.recv().unwrap(), vec![0x1B, 0x54]);
+        assert!(write_rx.try_recv().is_err());
     }
 }

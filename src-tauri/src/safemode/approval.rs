@@ -54,13 +54,9 @@ impl ApprovalStore {
         (event, rx)
     }
 
-    /// Take the responder for `id` and send `approve`. Returns whether a pending entry existed.
-    pub fn resolve(&mut self, id: &str, approve: bool) -> bool {
-        let Some(pending) = self.pending.remove(id) else {
-            return false;
-        };
-        let _ = pending.responder.send(approve);
-        true
+    /// Remove and return the responder for `id` without sending (caller sends outside any outer lock).
+    pub fn take(&mut self, id: &str) -> Option<SyncSender<bool>> {
+        self.pending.remove(id).map(|p| p.responder)
     }
 
     pub fn cancel(&mut self, id: &str) {
@@ -108,9 +104,10 @@ mod tests {
             "tu1".into(),
             0,
         );
-        assert!(store.resolve(&event.id, true));
+        let tx = store.take(&event.id).expect("pending");
+        tx.send(true).unwrap();
         assert_eq!(rx.recv_timeout(StdDuration::from_millis(50)), Ok(true));
-        assert!(!store.resolve(&event.id, true));
+        assert!(store.take(&event.id).is_none());
     }
 
     #[test]
@@ -124,7 +121,7 @@ mod tests {
             "tu1".into(),
             0,
         );
-        store.resolve(&event.id, false);
+        store.take(&event.id).unwrap().send(false).unwrap();
         assert_eq!(rx.recv_timeout(StdDuration::from_millis(50)), Ok(false));
     }
 
@@ -156,8 +153,8 @@ mod tests {
             "tu1".into(),
             0,
         );
-        assert!(store.resolve(&event.id, true));
-        assert!(!store.resolve(&event.id, true));
+        store.take(&event.id).unwrap().send(true).unwrap();
+        assert!(store.take(&event.id).is_none());
         assert_eq!(rx.recv_timeout(StdDuration::from_millis(50)), Ok(true));
     }
 
@@ -173,7 +170,7 @@ mod tests {
             0,
         );
         store.cancel(&event.id);
-        assert!(!store.resolve(&event.id, true));
+        assert!(store.take(&event.id).is_none());
         assert_eq!(
             rx.recv_timeout(StdDuration::from_millis(20)),
             Err(RecvTimeoutError::Disconnected)
