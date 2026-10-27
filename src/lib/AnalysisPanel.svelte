@@ -115,6 +115,20 @@
           </div>
         {/if}
 
+        {#if analysis.committed === false}
+          <div class="gate-banner held">
+            Commit gate held — no parser, no dashboard. {analysis.commit_reason}
+          </div>
+        {:else if analysis.gate_mode === 'naive'}
+          <div class="gate-banner naive">
+            Naive lane — parser installed without evidence. Contrast only.
+          </div>
+        {:else if analysis.committed === true}
+          <div class="gate-banner ok">
+            Commit gate passed. {analysis.commit_reason}
+          </div>
+        {/if}
+
         <!-- Fields table -->
         {#if analysis.fields.length > 0}
           <div class="section-label">Extracted Fields <span class="edit-hint">· click ✎ to edit regex</span></div>
@@ -174,8 +188,8 @@
       <div class="loading-state">
         <div class="spinner"></div>
         <div class="loading-text">
-          <div class="loading-main">Claude is analyzing the stream…</div>
-          <div class="loading-sub">Using extended thinking for deeper protocol inference</div>
+          <div class="loading-main">Muse Spark is analyzing the stream…</div>
+          <div class="loading-sub">Reading the frame before a parser is installed</div>
         </div>
       </div>
 
@@ -244,6 +258,29 @@
   .sample-count-label {
     color: #a78bfa;
     opacity: 0.8;
+  }
+
+  .gate-banner {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 0.45rem 0.55rem;
+    border-radius: 6px;
+    margin: 0.5rem 0 0.35rem;
+  }
+  .gate-banner.held {
+    background: #2a1212;
+    color: #fca5a5;
+    border: 1px solid #7f1d1d;
+  }
+  .gate-banner.naive {
+    background: #2a2412;
+    color: #fcd34d;
+    border: 1px solid #854d0e;
+  }
+  .gate-banner.ok {
+    background: #10241a;
+    color: #86efac;
+    border: 1px solid #166534;
   }
 
   .panel-body {

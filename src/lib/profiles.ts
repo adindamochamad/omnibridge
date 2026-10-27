@@ -57,6 +57,7 @@ export async function saveProfile(
   device: DiscoveredDevice,
   analysis: ProtocolAnalysis
 ): Promise<DeviceProfile | null> {
+  if (analysis.committed === false) return null;
   if (analysis.confidence < MIN_CONFIDENCE_TO_SAVE) return null;
 
   const store = await getStore();

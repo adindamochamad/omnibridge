@@ -6,14 +6,13 @@
 
 OmniBridge identifies any legacy serial device protocol — binary, undocumented, proprietary — in under a minute. It is what industrial integration looks like once models can reason about raw bytes.
 
-![Claude Opus 4.7](https://img.shields.io/badge/Claude-Opus%204.7-D97706?logo=anthropic)
+![Muse Spark 1.3](https://img.shields.io/badge/Muse-Spark%201.3-0081FB?logo=meta)
 ![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?logo=tauri)
 ![Svelte 5](https://img.shields.io/badge/Svelte-5.0-FF3E00?logo=svelte)
 ![Rust](https://img.shields.io/badge/Rust-stable-000000?logo=rust)
 ![CI](https://github.com/adindamochamad/omnibridge/actions/workflows/ci.yml/badge.svg)
-![40 tests](https://img.shields.io/badge/tests-40%20passing-22c55e)
 
-*Built for the Claude Opus 4.7 Hackathon 2026 · Problem Statement: **Build For What's Next***
+*Meta Global AI Developer Hackathon 2026 · Indie · **Push the Frontier** · [what we built this week](docs/HACKATHON_2026.md)*
 
 <!-- Replace with real screenshot: 1400×800 capture of the app with Modbus investigation + live Dashboard + cost summary card visible -->
 <!-- ![OmniBridge Hero](docs/hero.png) -->
@@ -38,7 +37,7 @@ But this is not a tool just for industrial engineers. The day I first got OmniBr
 
 Anyone who has ever typed `screen /dev/tty.usbmodem` and stared at unreadable bytes has encountered the problem OmniBridge solves.
 
-When Opus 4.7 shipped with multi-turn tool use, adaptive extended thinking, and a 1M-token context window, I realized the shortcut I had wanted for years was finally buildable. So I built it — across an industrial-to-maker-to-academic spectrum of use cases, not one narrow vertical.
+When Muse Spark could use tools on raw bytes, I realized the shortcut I had wanted for years was finally buildable. So I built it — across an industrial-to-maker-to-academic spectrum of use cases, not one narrow vertical.
 
 This is **Build From What You Know** meeting **Build For What's Next**: a problem category I have lived, addressable by a model capability class that emerged this year, relevant to tens of millions of people with a USB-to-serial cable in a drawer.
 
@@ -55,7 +54,7 @@ ASCII or binary protocols over RS-232 that take **weeks of developer time per de
 - Build glue code to forward data to modern systems (Slack, databases, cloud APIs)
 - Repeat for every. single. device.
 
-**OmniBridge replaces that week of work with 5 minutes of "plug in and let Claude figure it out".**
+**OmniBridge replaces that week of work with 5 minutes of "plug in and let Muse Spark figure it out".**
 
 ---
 
@@ -67,7 +66,7 @@ graph LR
   Port --> Rust[Rust Backend<br/>tauri + serialport]
   Rust -->|port:data events| UI[Svelte 5 UI]
 
-  UI -->|Raw bytes| Agent{Claude Agent<br/>Opus 4.7}
+  UI -->|Raw bytes| Agent{Muse Spark Agent<br/>muse-spark-1.3}
   Agent -.->|Tools| Rust
   Agent -->|protocol + regex + presets| Profile[(Device Profile<br/>learned storage)]
 
@@ -80,11 +79,11 @@ graph LR
 
 ### Core capabilities
 
-1. **Protocol Detective** — Claude analyzes raw bytes → identifies protocol → generates per-field regex
+1. **Protocol Detective** — Muse Spark analyzes raw bytes → identifies protocol → generates per-field regex
 2. **Live Dashboard** — real-time parsed values with sparkline charts (no API calls — regex runs locally)
 3. **Device Profile Learning** — remembers each device by VID/PID → instant recognition on reconnect
-4. **Agentic Investigation** — Claude uses tools (`read_more_lines`, `search_pattern`, `probe_baud`, `send_bytes`, `get_device_metadata`) to iteratively identify unknown devices
-5. **Bidirectional Communication** — send commands to device with ASCII/HEX input, Claude-generated presets
+4. **Agentic Investigation** — Muse Spark uses tools (`read_more_lines`, `search_pattern`, `probe_baud`, `send_bytes`, `get_device_metadata`) to iteratively identify unknown devices
+5. **Bidirectional Communication** — send commands to device with ASCII/HEX input, Muse Spark-generated presets
 6. **Cloud Bridge** — forward structured data to any webhook (Zapier, n8n, Home Assistant, custom)
 7. **Export** — CSV/JSON download for offline analysis
 
@@ -97,7 +96,7 @@ graph LR
 <td width="50%">
 
 ### 🧠 Protocol Detective
-One-shot analysis or multi-step investigation. Claude identifies CAS scale, NMEA 0183, Modbus RTU, or custom protocols from raw serial bytes. Generates ECMAScript regex per field + `data_type` + `unit`.
+One-shot analysis or multi-step investigation. Muse Spark identifies CAS scale, NMEA 0183, Modbus RTU, or custom protocols from raw serial bytes. Generates ECMAScript regex per field + `data_type` + `unit`.
 
 </td>
 <td width="50%">
@@ -117,7 +116,7 @@ Every successful analysis (confidence ≥ 55%) is saved keyed by `VID:PID:Serial
 <td width="50%">
 
 ### 🔬 Agentic Investigation
-Claude uses **6 tools** to investigate unknown devices: read more lines, search ASCII patterns, **analyze binary structure** (CRC16 + frame detection), probe baud rates, send queries, lookup VID/PID. Live trace UI streams each step — thinking, tool call, tool result, final.
+Muse Spark uses **6 tools** to investigate unknown devices: read more lines, search ASCII patterns, **analyze binary structure** (CRC16 + frame detection), probe baud rates, send queries, lookup VID/PID. Live trace UI streams each step — thinking, tool call, tool result, final.
 
 </td>
 </tr>
@@ -125,7 +124,7 @@ Claude uses **6 tools** to investigate unknown devices: read more lines, search 
 <td width="50%">
 
 ### → Bidirectional Communication
-Send commands to devices with ASCII (with `\r \n \xNN` escapes) or HEX input. Claude-generated presets auto-populate — "Tare" for scales, "Set 1Hz" for GPS, Modbus queries for PLCs.
+Send commands to devices with ASCII (with `\r \n \xNN` escapes) or HEX input. Muse Spark-generated presets auto-populate — "Tare" for scales, "Set 1Hz" for GPS, Modbus queries for PLCs.
 
 </td>
 <td width="50%">
@@ -155,7 +154,7 @@ Or build from source (below).
 
 ### First launch
 
-1. Open OmniBridge → click **⚙ Settings** → paste your [Anthropic API key](https://console.anthropic.com)
+1. Open OmniBridge → click **⚙ Settings** → paste your [Meta Model API](https://dev.meta.ai) key (`muse-spark-1.3` Standard)
 2. Click **⊕ Discover Devices** to scan serial ports
 3. Don't have hardware? Click **▶ Try Demo Mode** — virtual CAS Scale, GPS, and Arduino are always available
 4. Pick a device → **▶ Monitor** → watch raw data stream
@@ -194,7 +193,7 @@ OmniBridge ships with **four** virtual devices that emit realistic data streams 
 | ⚖️ CAS Weighing Scale | ASCII with stability flag | 4 Hz | `ST,GS,  1.234 kg\r\n` | One-shot `⚡ Live` analysis |
 | 🛰️ GPS Receiver | NMEA 0183 | 1 Hz | `$GPGGA,123456.00,0612.48,S,10650.73,E,1,08,0.9,25.3,M...\r\n` | Checksum pattern verification |
 | 🌡️ Arduino Sensor Array | key=value CSV | 2 Hz | `temp=24.5,humid=62.3,light=512\r\n` | Sparkline dashboard |
-| 🏭 Modbus RTU PLC | **Binary** with CRC16 | 1.7 Hz | `01 03 14 00 FE 03 F5 00 2D 07 08 00 4B ... <CRC>` | **Agentic `🔬 Investigate`** — showcases Opus 4.7 |
+| 🏭 Modbus RTU PLC | **Binary** with CRC16 | 1.7 Hz | `01 03 14 00 FE 03 F5 00 2D 07 08 00 4B ... <CRC>` | **Agentic `🔬 Investigate`** — showcases muse-spark-1.3 |
 
 Toggle via **▶ Try Demo Mode** in the sidebar.
 
@@ -206,7 +205,7 @@ Toggle via **▶ Try Demo Mode** in the sidebar.
 - **Tauri 2** — cross-platform desktop shell (native WebView, Rust backend)
 - **Rust + `serialport` 4.9** — direct port access, channel-based write, VID/PID classification
 - **SvelteKit + Svelte 5** (runes mode) — reactive UI
-- **Anthropic SDK + Claude Opus 4.7** — adaptive thinking, tool use, prompt caching
+- **Meta Model API + Muse Spark 1.3** — tool use, prompt caching, commit gate before parser install
 - **`@tauri-apps/plugin-store`** — persistent settings, device profiles, webhook configs
 
 ### Key files
@@ -230,15 +229,15 @@ src/lib/
 
 ---
 
-## 🧬 Why Opus 4.7 Specifically
+## 🧬 Why Muse Spark
 
-OmniBridge is **not** a chatbot wrapper — every Opus 4.7 capability below maps to a concrete user-visible feature. Downgrade the model and the product breaks.
+OmniBridge is **not** a chatbot wrapper — the model capabilities below map to a concrete user-visible feature. The commit gate still decides whether a parser may be installed.
 
 | Capability | How OmniBridge uses it | What would break without it |
 |---|---|---|
 | **Adaptive extended thinking** (`thinking: {type: "adaptive"}`) | Model spends more compute on Modbus RTU & unknown binary protocols, less on obvious NMEA/CSV | CAS scale would still work; Modbus CRC16 inference would regress to guesswork |
-| **Multi-turn tool use** (6 tools, up to 8 iterations) | Claude picks from six purpose-built tools. For binary streams, `analyze_binary_structure` alone often returns enough (CRC validation + frame autocorrelation + sample frames) to commit — surgical efficiency. The agent can chain additional tools when the first isn't conclusive. | Without multi-turn tool use there's no way to call custom CRC validation, cross-reference VID/PID, or probe baud mid-reasoning — binary protocol inference collapses |
-| **Thinking preservation across tool results** (streaming `.finalMessage()`) | Each tool result is evaluated *with* the prior thinking still in context, so Claude builds on its own hypotheses instead of restarting | Tool calls would become independent shots; user sees "random" tool selection in the trace |
+| **Multi-turn tool use** (6 tools, up to 8 iterations) | Muse Spark picks from six purpose-built tools. For binary streams, `analyze_binary_structure` alone often returns enough (CRC validation + frame autocorrelation + sample frames) to commit — surgical efficiency. The agent can chain additional tools when the first isn't conclusive. | Without multi-turn tool use there's no way to call custom CRC validation, cross-reference VID/PID, or probe baud mid-reasoning — binary protocol inference collapses |
+| **Thinking preservation across tool results** (streaming `.finalMessage()`) | Each tool result is evaluated *with* the prior thinking still in context, so Muse Spark builds on its own hypotheses instead of restarting | Tool calls would become independent shots; user sees "random" tool selection in the trace |
 | **Prompt caching** (`cache_control: ephemeral` on system prompt) | ~65% cache hit rate on repeat investigations (cached reads are ~10× cheaper per token than fresh input). Saves real money on every Live Mode retrigger | Every analyze-live retrigger would pay full fresh-input price; Live Mode becomes economically unviable on a hobbyist key |
 | **1M-token context window** | Full 1000-line buffer + VID/PID metadata + all 6 tool definitions fit in a single request | Would need to truncate buffer aggressively, losing rare packet types that only appear once per 500 lines |
 
@@ -247,7 +246,7 @@ OmniBridge is **not** a chatbot wrapper — every Opus 4.7 capability below maps
 ```
 User clicks 🔬 Investigate on Modbus PLC
   ↓
-[Claude, interleaved reasoning]
+[Muse Spark, interleaved reasoning]
   "Binary stream. Hypothesize Modbus RTU framing
    (slave 1, FC 3, 10 registers × 2 bytes + CRC)."
   ↓
@@ -255,7 +254,7 @@ User clicks 🔬 Investigate on Modbus PLC
   → returns: 21/21 frames pass CRC16 · STRONG MATCH
              frame_length=25, sample_frames_hex=[...]
   ↓
-[Claude, now confident — one tool was enough]
+[Muse Spark, now confident — one tool was enough]
   "Strong Modbus RTU match. Emit 5 fields with
    byte-offset regex on hex representation."
   ↓
@@ -282,7 +281,7 @@ User clicks 🔬 Investigate on Modbus PLC
 - Debounce: 400ms (works for 1Hz GPS up to 100Hz Modbus)
 
 ### Cost-conscious defaults
-- Claude API is called **only on Analyze / Investigate / Live** — not for live dashboard updates
+- Muse Spark API is called **only on Analyze / Investigate / Live** — not for live dashboard updates
 - Once a device is learned, reopening loads from local store with zero API calls
 - All regex parsing, sparklines, webhook forwarding = free after initial identification
 
@@ -332,6 +331,6 @@ MIT — see [LICENSE](./LICENSE)
 
 **⬡ OmniBridge** — *legacy hardware, first-class citizens*
 
-Made with ◇ Tauri, ◉ Svelte, ⚙ Rust, and 🧠 Claude
+Made with ◇ Tauri, ◉ Svelte, ⚙ Rust, and 🧠 Muse Spark
 
 </div>

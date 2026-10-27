@@ -362,7 +362,7 @@
         <div class="logo-icon">⬡</div>
         <div class="logo-text">
           <div class="app-name">OmniBridge</div>
-          <div class="app-sub">CAS Scale Bridge · v{versiPkg.version}</div>
+          <div class="app-sub">Commit gate · {versiPkg.version} · muse-spark-1.3</div>
         </div>
         <button class="header-icon-btn" onclick={() => (showSettings = true)} title="Settings">
           ⚙
@@ -378,6 +378,7 @@
           ⊕ Discover Devices
         {/if}
       </button>
+      <a class="demo-btn" href="/hackathon">⬡ Commit gate</a>
       <button class="demo-btn" class:active={demoActive} onclick={toggleDemoMode}>
         {#if demoActive}
           ✓ Demo Mode
@@ -456,15 +457,15 @@
         {#if devices.length === 0}
           <p class="intro">
             Bridge legacy RS-232 hardware to modern cloud ecosystems.<br />
-            Claude automatically identifies your device's protocol, parses<br />
-            the data, and forwards structured values to any webhook endpoint.
+            Muse Spark identifies the protocol, but the commit gate withholds the parser<br />
+            until framing evidence matches the hypothesis.
           </p>
           {#if needsApiKey}
             <button class="api-key-hint" onclick={() => (showSettings = true)} type="button">
               <span class="hint-icon">🔑</span>
               <span class="hint-text">
                 <strong>First time here?</strong>
-                Add your Anthropic API key to unlock AI protocol detection →
+                Add your Meta Model API key (muse-spark-1.3 Standard) →
               </span>
               <span class="hint-arrow">⚙</span>
             </button>
@@ -481,7 +482,7 @@
             <div class="feature">
               <div class="feature-icon">🧠</div>
               <div class="feature-title">Protocol Detective</div>
-              <div class="feature-desc">Claude analyzes raw bytes → identifies CAS scale, NMEA GPS, Modbus, or custom formats</div>
+              <div class="feature-desc">Muse Spark reads raw bytes, then a code commit gate decides whether a parser may be installed</div>
             </div>
             <div class="feature">
               <div class="feature-icon">📊</div>
@@ -700,6 +701,10 @@
   }
 
   .demo-btn {
+    display: block;
+    box-sizing: border-box;
+    text-align: center;
+    text-decoration: none;
     width: 100%;
     padding: 0.45rem 0.8rem;
     background: transparent;

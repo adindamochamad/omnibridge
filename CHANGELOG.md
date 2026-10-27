@@ -4,6 +4,40 @@ All notable changes to OmniBridge are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions use
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] — 2026-10-27
+
+Judge-facing commit gate.
+
+### Added
+- `/hackathon` default: Modbus with **broken CRC** so naive commits while verified holds on the same bytes
+- Gate chips on the live buffer (held / naive / passed)
+- Tool-call list on the compare page
+- Compare page shows buffer CRC against 0.90, model confidence beside the tool CRC, and whether command presets would be sent or withheld
+- `/hackathon` is a comparison sheet in the desktop window: one CRC readout, the byte tape, then naive and verified on the same grid
+- Verified hold also catches a Modbus-shaped parser whose title omits the word Modbus
+- Compare run refuses `send_bytes` before an approval dialog, and a hold keeps the refused command names off the installed parser
+- Meta client sends the key as a bearer token to `https://api.meta.ai/v1/messages`. The previous base URL doubled `/v1`, and Meta answered `invalid_api_key`
+- An Anthropic key left in the old settings field is no longer sent to Meta. The compare page asks for a Standard key from dev.meta.ai (`LLM_`)
+
+### Changed
+- App subtitle names the commit gate and Muse Spark, not the old CAS-only branding
+- Commit gate page shows the hackathon caption and a live PLC faceplate decoded from the Modbus frame
+- On-screen analysis, investigation, and chat copy names Muse Spark instead of Claude or Opus
+
+## [0.3.0] — 2026-10-27
+
+Meta Global AI Developer Hackathon 2026 (Indie · Push the Frontier).
+
+### Added
+- **Commit gate** — verified investigation withholds parser fields, dashboard, and learned profiles until framing evidence matches (`src/lib/commit-gate.ts`)
+- **Muse Spark 1.3** via Meta Model API (`https://api.meta.ai/v1`, Standard mode)
+- **Side-by-side demo** at `/hackathon` (virtual CAS scale vs Modbus RTU)
+- Settings + Test connection for Meta Model API keys
+
+### Changed
+- Agent and one-shot analysis no longer call Anthropic Claude Opus
+- Naive Analyze still commits without evidence (explicit contrast lane)
+
 ## [0.2.0] — 2026-08-09
 
 ### Added

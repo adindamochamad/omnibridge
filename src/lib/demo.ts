@@ -62,8 +62,9 @@ function gpsGen(): Uint8Array {
 // Demonstrates binary protocol investigation — Claude must use tool use to identify.
 const MODBUS_SLAVE = 0x01;
 const MODBUS_FUNC_READ = 0x03;
-// Register map: [temp×10, pressure_hPa, flow_L/min, motor_RPM, valve_%, alarm_bits, reserved×4]
-let modbusRegisters = [254, 1013, 45, 1800, 75, 0x0000, 0, 0, 0, 0];
+// Register map: temp×10, pressure_hPa, flow_L/min, motor_RPM, valve_%, alarm, runtime_min, current_A×10, energy_kWh, setpoint.
+// Values stay non-zero so a broken CRC is two bytes at the end, not a blank tail of reserved zeros.
+let modbusRegisters = [0x01fe, 0x03f5, 0x022d, 0x0708, 0x024b, 0x0103, 0x0190, 0x0234, 0x0158, 0x02bc];
 
 function modbusCrc16(data: number[]): [number, number] {
   let crc = 0xffff;

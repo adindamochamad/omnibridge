@@ -209,7 +209,7 @@
       {#if usage && (usage.input_tokens > 0 || usage.output_tokens > 0)}
         <span
           class="cost-chip"
-          title={`Tokens · in: ${usage.input_tokens} · out: ${usage.output_tokens} · cached: ${usage.cache_read_tokens} · cache-write: ${usage.cache_write_tokens}\nEstimated cost at public Opus 4.7 rates — consult anthropic.com/pricing for authoritative figures.`}
+          title={`Tokens · in: ${usage.input_tokens} · out: ${usage.output_tokens} · cached: ${usage.cache_read_tokens} · cache-write: ${usage.cache_write_tokens}\nEstimated cost at Muse Spark Standard rates (dev.meta.ai pricing).`}
         >
           💰 {formatCost(usage.estimated_cost_usd)}
           {#if usage.cache_hit_ratio > 0.1}
@@ -243,7 +243,7 @@
         <div class="empty-icon">🔬</div>
         <div class="empty-title">Ready to investigate</div>
         <div class="empty-sub">
-          Click <strong>🔬 Investigate</strong> — Claude will use tools to
+          Click <strong>🔬 Investigate</strong> — Muse Spark will use tools to
           iteratively identify this device's protocol.
         </div>
       </div>
@@ -286,7 +286,7 @@
           <div class="thinking-dots">
             <span></span><span></span><span></span>
           </div>
-          <span class="thinking-text">Claude is thinking…</span>
+          <span class="thinking-text">Muse Spark is thinking…</span>
         </div>
       {/if}
 
@@ -316,8 +316,7 @@
             </div>
           </div>
           <div class="cost-summary-note">
-            Estimated at public Opus 4.7 pricing. Prompt caching makes repeat investigations
-            {#if usage.cache_hit_ratio > 0.5}substantially{:else}meaningfully{/if} cheaper than the headline rate.
+            Token counts for this investigation. Cached input is cheaper than a fresh prompt.
           </div>
         </div>
       {/if}

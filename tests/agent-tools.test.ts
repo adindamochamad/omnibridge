@@ -214,6 +214,19 @@ describe('send_bytes — Safe Mode gate', () => {
     );
   });
 
+  it('refuses transmit on the compare run before any host call', async () => {
+    const raw = await executeTool(
+      'send_bytes',
+      { hex: '01 06 00 00 00 01', purpose: 'write register' },
+      { ...emptyCtx, port: 'demo://modbus-plc', denyTransmit: true },
+      TOOL_USE_ID
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.blocked).toBe(true);
+    expect(parsed.retry).toBe('do_not_retry');
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
+  });
+
   it('propagates authorize denial without calling send gate', async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === 'safemode_authorize_tool') {

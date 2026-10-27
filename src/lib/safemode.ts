@@ -40,3 +40,17 @@ export function formatCountdownSeconds(remainingMs: number): string {
   const totalSec = Math.ceil(remainingMs / 1000);
   return String(Math.max(0, totalSec));
 }
+
+export interface AuditEventRow {
+  seq: number;
+  ts_ms: number;
+  event: string;
+  tool?: string;
+  port?: string;
+  hex?: string;
+  reason?: string;
+  decision?: string;
+  detail?: string;
+  prev_hash: string;
+  hash: string;
+}

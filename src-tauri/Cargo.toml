@@ -31,4 +31,6 @@ tauri-plugin-store = "2.4.2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 # Safe Mode policy: compile and match hex payload patterns (M1).
 regex = "1"
+# Safe Mode audit log: SHA-256 hash chain over JSONL lines (M4).
+sha2 = "0.10"
 

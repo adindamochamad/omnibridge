@@ -62,7 +62,7 @@
       <div class="no-rules-icon">📡</div>
       <div class="no-rules-title">No parsing rules yet</div>
       <div class="no-rules-sub">
-        Run <strong>⬡ Analyze</strong> — Claude will generate regex patterns
+        Run <strong>⬡ Analyze</strong> — Muse Spark will generate regex patterns
         to extract live field values from your stream.
       </div>
     </div>

@@ -10,11 +10,12 @@ export const URL_WEBHOOK_ONLINE = 'https://bat.entis.app/api/scale';
 export const HEADER_CUSTOM_DEFAULT = 'gs-key: your-api-key-here';
 
 /**
- * Kunci API Anthropic — di-inline ke bundle saat build jika
- * VITE_ANTHROPIC_API_KEY diset (lokal .env atau secret CI).
+ * Meta Model API key — di-inline ke bundle saat build jika
+ * VITE_META_MODEL_API_KEY diset (lokal .env atau secret CI).
  */
-export const KUNCI_API_ANTHROPIC_DEFAULT =
-  (import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '';
+export const KUNCI_META_MODEL_API_DEFAULT =
+  (import.meta.env.VITE_META_MODEL_API_KEY as string) ||
+  '';
 
 /** Konfigurasi webhook CAS bawaan — dipakai preset, defaultConfig, dan merge store. */
 export function konfigurasiWebhookCasDefault(): WebhookConfig {

@@ -225,10 +225,13 @@ async fn start_port_monitor(
 #[tauri::command]
 fn send_bytes_to_port(
     registry: tauri::State<'_, MonitorRegistry>,
+    safe_mode: tauri::State<'_, safemode::gate::SafeModeState>,
     port: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
-    write_to_port(registry.inner(), &port, data)
+    write_to_port(registry.inner(), &port, data.clone())?;
+    safe_mode.record_human_write(&port, &data)?;
+    Ok(())
 }
 
 fn is_printable_byte(b: u8) -> bool {
@@ -441,7 +444,18 @@ pub fn run() {
                 .app_config_dir()
                 .map_err(|e| e.to_string())?
                 .join("safemode-policy.json");
-            app.manage(safemode::gate::init_state(&policy_path));
+            let audit_path = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| e.to_string())?
+                .join("safemode-audit.jsonl");
+            let enabled_path = app
+                .path()
+                .app_config_dir()
+                .map_err(|e| e.to_string())?
+                .join("safemode-enabled.json");
+            let safe_state = safemode::gate::init_state(&policy_path, audit_path, enabled_path)?;
+            app.manage(safe_state);
             Ok(())
         })
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -458,6 +472,9 @@ pub fn run() {
             safemode::gate::safemode_authorize_tool,
             safemode::gate::safemode_resolve_approval,
             safemode::gate::safemode_agent_send_bytes,
+            safemode::gate::safemode_read_audit,
+            safemode::gate::safemode_get_enabled,
+            safemode::gate::safemode_set_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -106,6 +106,8 @@ export interface ToolContext {
   port: string;
   lines: DataLine[];
   device: DiscoveredDevice | null;
+  /** Compare runs identify the buffer only. Never open a write approval. */
+  denyTransmit?: boolean;
 }
 
 // ── Tool executor ──────────────────────────────────────────────────────────
@@ -140,6 +142,17 @@ export async function executeTool(
   ctx: ToolContext,
   toolUseId: string
 ): Promise<string> {
+  if (ctx.denyTransmit && (name === 'send_bytes' || name === 'probe_baud_rate')) {
+    return JSON.stringify({
+      ok: false,
+      blocked: true,
+      retry: 'do_not_retry',
+      reason: 'transmit_disabled',
+      message:
+        'This run identifies the buffer only. Do not transmit. Call analyze_binary_structure before the final JSON.',
+    });
+  }
+
   try {
     const auth = await invoke<SafemodeAuthorizeResult>('safemode_authorize_tool', {
       toolName: name,

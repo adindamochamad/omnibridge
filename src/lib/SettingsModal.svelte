@@ -2,8 +2,10 @@
   import { getApiKey, setApiKey, clearApiKey } from '$lib/settings.js';
   import { getAllProfiles, clearAllProfiles, exportProfilesJson, importProfilesJson } from '$lib/profiles.js';
   import { downloadFile } from '$lib/export.js';
+  import AuditLogPanel from '$lib/AuditLogPanel.svelte';
   import versiPkg from '../../package.json';
-  import Anthropic from '@anthropic-ai/sdk';
+  import { invoke } from '@tauri-apps/api/core';
+  import { createMetaModelClient, META_MODEL_SPARK } from '$lib/meta-api.js';
 
   let { onClose, onProfilesChanged }: { onClose: () => void; onProfilesChanged?: () => void } = $props();
 
@@ -20,8 +22,9 @@
   });
 
   async function load() {
+    await loadSafeMode();
     try {
-      const envKey = (import.meta.env.VITE_ANTHROPIC_API_KEY as string) || '';
+      const envKey = (import.meta.env.VITE_META_MODEL_API_KEY as string) || '';
       const stored = await getApiKey();
       if (stored) {
         apiKey = stored;
@@ -60,13 +63,14 @@
     testing = true;
     testResult = null;
     try {
-      const client = new Anthropic({
-        apiKey: apiKey.trim(),
-        dangerouslyAllowBrowser: true,
-      });
+      const client = createMetaModelClient(apiKey.trim());
       const res = await client.models.list();
-      const count = res.data?.length ?? 0;
-      testResult = { ok: true, message: `✓ Connected — ${count} models available` };
+      const ids = (res.data ?? []).map((m) => m.id);
+      const spark = ids.includes(META_MODEL_SPARK) ? ` · ${META_MODEL_SPARK} listed` : '';
+      testResult = {
+        ok: true,
+        message: `✓ Meta Model API — ${ids.length} models${spark}. Use Standard muse-spark-1.3, not contributor.`,
+      };
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       testResult = { ok: false, message: `✗ ${msg.slice(0, 140)}` };
@@ -102,6 +106,63 @@
   let profileActionMsg = $state<{ ok: boolean; message: string } | null>(null);
   let importingProfiles = $state(false);
   let importInputEl = $state<HTMLInputElement | null>(null);
+
+  let safeModeEnabled = $state(true);
+  let safeModeLoading = $state(false);
+  let safeModeMsg = $state<{ ok: boolean; message: string } | null>(null);
+  let disableConfirmText = $state('');
+  let showDisableConfirm = $state(false);
+
+  async function loadSafeMode() {
+    safeModeLoading = true;
+    try {
+      safeModeEnabled = await invoke<boolean>('safemode_get_enabled');
+    } catch {
+      safeModeEnabled = true;
+    } finally {
+      safeModeLoading = false;
+    }
+  }
+
+  async function handleEnableSafeMode() {
+    safeModeMsg = null;
+    safeModeLoading = true;
+    try {
+      safeModeEnabled = await invoke<boolean>('safemode_set_enabled', {
+        enabled: true,
+        confirmText: null,
+      });
+      safeModeMsg = { ok: true, message: 'Safe Mode enabled' };
+      showDisableConfirm = false;
+      disableConfirmText = '';
+    } catch (e) {
+      safeModeMsg = { ok: false, message: String(e) };
+    } finally {
+      safeModeLoading = false;
+    }
+  }
+
+  async function handleDisableSafeMode() {
+    if (!showDisableConfirm) {
+      showDisableConfirm = true;
+      return;
+    }
+    safeModeMsg = null;
+    safeModeLoading = true;
+    try {
+      safeModeEnabled = await invoke<boolean>('safemode_set_enabled', {
+        enabled: false,
+        confirmText: disableConfirmText,
+      });
+      safeModeMsg = { ok: true, message: 'Safe Mode disabled — agent writes skip approval' };
+      showDisableConfirm = false;
+      disableConfirmText = '';
+    } catch (e) {
+      safeModeMsg = { ok: false, message: String(e) };
+    } finally {
+      safeModeLoading = false;
+    }
+  }
 
   async function handleExportProfiles() {
     try {
@@ -193,7 +254,7 @@
       <section class="section">
         <div class="section-title">
           <span class="section-icon">🔑</span>
-          <span>Anthropic API Key</span>
+          <span>Meta Model API Key</span>
           {#if keySource === 'store'}
             <span class="source-tag store">stored</span>
           {:else if keySource === 'env'}
@@ -207,7 +268,7 @@
           {#if showKey}
             <input
               type="text"
-              placeholder="Tempel API key Anthropic di sini"
+              placeholder="Paste Meta Model API key (Standard)"
               bind:value={apiKey}
               autocomplete="off"
               spellcheck="false"
@@ -215,7 +276,7 @@
           {:else}
             <input
               type="password"
-              placeholder="Tempel API key Anthropic di sini"
+              placeholder="Paste Meta Model API key (Standard)"
               bind:value={apiKey}
               autocomplete="off"
               spellcheck="false"
@@ -227,8 +288,8 @@
         </div>
 
         <div class="help-text">
-          Get your API key at <span class="link">console.anthropic.com</span>.
-          Keys are stored in your app data directory, never synced or sent to us.
+          Create a key at <span class="link">dev.meta.ai</span> (Model API dashboard).
+          Use <strong>muse-spark-1.3</strong> Standard. Keys stay in local app data.
         </div>
 
         {#if testResult}
@@ -300,7 +361,7 @@
             class:pending-confirm={profilesConfirmPending}
             onclick={handleClearProfiles}
             disabled={profileCount === 0 || clearingProfiles}
-            title="Remove all learned device profiles — useful before demo recording or stress testing"
+            title="Remove all learned device profiles"
           >
             {#if clearingProfiles}
               Clearing…
@@ -320,6 +381,60 @@
 
       <div class="divider"></div>
 
+      <section class="section">
+        <div class="section-title">
+          <span class="section-icon">🛡</span>
+          <span>Safe Mode</span>
+          {#if safeModeEnabled}
+            <span class="source-tag store">on</span>
+          {:else}
+            <span class="source-tag none">off</span>
+          {/if}
+        </div>
+        <p class="help-text safe-mode-help">
+          When on, agent <code>send_bytes</code> requires your approval. Policy limits (size, deny patterns) and the audit log always apply.
+        </p>
+        <div class="button-row">
+          {#if safeModeEnabled}
+            <button
+              type="button"
+              class="btn ghost-danger"
+              onclick={handleDisableSafeMode}
+              disabled={safeModeLoading}
+            >
+              {showDisableConfirm ? 'Confirm disable' : 'Disable Safe Mode'}
+            </button>
+          {:else}
+            <button
+              type="button"
+              class="btn primary"
+              onclick={handleEnableSafeMode}
+              disabled={safeModeLoading}
+            >
+              Enable Safe Mode
+            </button>
+          {/if}
+        </div>
+        {#if showDisableConfirm && safeModeEnabled}
+          <label class="disable-label">
+            Type <strong>MATIKAN</strong> to disable
+            <input
+              type="text"
+              bind:value={disableConfirmText}
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="MATIKAN"
+            />
+          </label>
+        {/if}
+        {#if safeModeMsg}
+          <div class="test-msg" class:fail={!safeModeMsg.ok}>{safeModeMsg.message}</div>
+        {/if}
+        <AuditLogPanel />
+      </section>
+
+      <div class="divider"></div>
+
       <!-- About -->
       <section class="section">
         <div class="section-title">
@@ -334,7 +449,7 @@
             <span>·</span>
             <span>Tauri 2 + Svelte 5</span>
             <span>·</span>
-            <span>Claude Opus 4.7</span>
+            <span>muse-spark-1.3</span>
           </div>
         </div>
       </section>
@@ -432,6 +547,28 @@
   .source-tag.store { background: #0e2018; color: #4ade80; border: 1px solid #1e4028; }
   .source-tag.env { background: #1e1e3a; color: #a78bfa; border: 1px solid #3a2e5a; }
   .source-tag.none { background: #2a1e1e; color: #f87171; border: 1px solid #4a2e2e; }
+
+  .safe-mode-help code {
+    font-size: 0.85em;
+    color: #a0b8f0;
+  }
+
+  .disable-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    color: #b0c0e8;
+  }
+
+  .disable-label input {
+    padding: 0.45rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid #4a2e2e;
+    background: #0a0e1a;
+    color: #f0d0d0;
+    font-family: ui-monospace, monospace;
+  }
 
   .input-row {
     display: flex;

@@ -231,6 +231,7 @@
 
   const hasParsableFields = $derived.by(() => {
     if (!analysisResult) return false;
+    if (analysisResult.committed === false) return false;
     const compiled = compileFields(analysisResult.fields);
     return Object.values(compiled).some((r) => r !== null);
   });
@@ -338,7 +339,7 @@
     const asciiSamples = lines.map((l) => l.ascii);
 
     try {
-      const result = await analyzeStream(hexSamples, asciiSamples, deviceClass);
+      const result = await analyzeStream(hexSamples, asciiSamples, deviceClass, lines);
       analysisResult = result;
       isRecognized = false;
       onAnalysisComplete?.(result);
@@ -395,8 +396,12 @@
     if (result.analysis) {
       analysisResult = result.analysis;
       isRecognized = false;
-      onAnalysisComplete?.(result.analysis);
       lastAnalyzedCount = lines.length;
+      if (result.analysis.committed !== false) {
+        onAnalysisComplete?.(result.analysis);
+      } else {
+        agentError = result.error ?? result.analysis.commit_reason ?? 'Commit gate held parser.';
+      }
     } else if (result.error) {
       agentError = result.error;
     }
@@ -411,6 +416,13 @@
       <span class="port-label">{shortPort(port)}</span>
       <span class="full-path">{port}</span>
       <span class="line-count">{lines.length} lines</span>
+      {#if analysisResult?.committed === false}
+        <span class="gate-chip held">gate held</span>
+      {:else if analysisResult?.gate_mode === 'naive'}
+        <span class="gate-chip naive">naive commit</span>
+      {:else if analysisResult?.committed === true}
+        <span class="gate-chip ok">gate passed</span>
+      {/if}
     </div>
     <div class="controls">
       <label class="toggle-label">
@@ -437,7 +449,7 @@
         class="ctrl-btn analyze"
         onclick={runAnalysis}
         disabled={analysisLoading || lines.length === 0}
-        title="⬡ Analyze — Fast one-shot (~5s, 1 API call). Best for clearly structured ASCII protocols where the pattern is already visible in the buffer (CAS scale, NMEA GPS, key=value CSV)."
+        title="⬡ Analyze — Naive one-shot on muse-spark-1.3. Installs a parser without the evidence gate (contrast lane)."
       >
         {#if analysisLoading}
           <span class="spin-sm">◌</span> Analyzing…
@@ -449,7 +461,7 @@
         class="ctrl-btn investigate"
         onclick={runInvestigation}
         disabled={investigating || lines.length === 0}
-        title="🔬 Investigate — Multi-step agent (~15-30s, 2-5 API calls). Claude uses tools to probe frame structure, validate CRCs, cross-reference hardware VID/PID. Use for binary protocols (Modbus RTU) or unknown streams."
+        title="🔬 Investigate — Muse Spark tool loop. Parser and dashboard install only if the commit gate sees matching framing evidence."
       >
         {#if investigating}
           <span class="spin-sm">◌</span> Investigating…
@@ -461,7 +473,7 @@
         class="ctrl-btn ask"
         onclick={() => { showAnalysis = true; bottomTab = 'ask'; }}
         disabled={lines.length === 0}
-        title="🤖 Ask — Free-form Q&A over the live buffer. Ask Claude questions in natural language — values, trends, anomalies, structure."
+        title="🤖 Ask — Free-form Q&A over the live buffer via Muse Spark."
       >
         🤖 Ask
       </button>
@@ -647,7 +659,7 @@
             class="bt-tab"
             class:active={bottomTab === 'ask'}
             onclick={() => (bottomTab = 'ask')}
-            title="Ask Claude natural-language questions about the live data"
+            title="Ask Muse Spark natural-language questions about the live data"
           >
             🤖 Ask
             {#if chatHistory.length > 0}
@@ -773,6 +785,27 @@
     font-size: 0.68rem;
     color: #3a3a5a;
     margin-left: 0.25rem;
+  }
+
+  .gate-chip {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    margin-left: 0.4rem;
+  }
+  .gate-chip.held {
+    background: #3a1515;
+    color: #fca5a5;
+  }
+  .gate-chip.naive {
+    background: #3a3215;
+    color: #fcd34d;
+  }
+  .gate-chip.ok {
+    background: #14301f;
+    color: #86efac;
   }
 
   .controls {

@@ -113,7 +113,7 @@
   <div class="chat-header">
     <div class="header-left">
       <span class="header-icon">🤖</span>
-      <span class="header-title">Ask Claude about your data</span>
+      <span class="header-title">Ask Muse Spark about your data</span>
       {#if sending}
         <span class="thinking-chip">
           <span class="dot"></span>
@@ -135,7 +135,7 @@
         <div class="empty-icon">💬</div>
         <div class="empty-title">Ask about the live stream</div>
         <div class="empty-sub">
-          Claude sees the recent buffer plus any protocol identification. Ask anything — values, trends, anomalies, structure.
+          Muse Spark sees the recent buffer plus any protocol identification. Ask anything — values, trends, anomalies, structure.
         </div>
         <div class="suggestions">
           {#each suggestedQuestions as q}
@@ -162,7 +162,7 @@
           </div>
           <div class="bubble">
             <div class="bubble-meta">
-              <span class="bubble-role">{msg.role === 'user' ? 'You' : 'Claude'}</span>
+              <span class="bubble-role">{msg.role === 'user' ? 'You' : 'Muse Spark'}</span>
               <span class="bubble-time">{formatTime(msg.timestamp)}</span>
             </div>
             <div class="bubble-content">

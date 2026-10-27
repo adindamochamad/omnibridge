@@ -67,8 +67,16 @@ impl PolicyEngine {
 
     pub fn evaluate(&mut self, tool: &str, payload: &[u8], now_ms: u64) -> Decision {
         if self.policy_invalid {
+            if known_read_tool(tool) {
+                return Decision::Allow;
+            }
+            if tool == "send_bytes" {
+                return Decision::Deny {
+                    rule: "policy_invalid".into(),
+                };
+            }
             return Decision::Deny {
-                rule: "policy_invalid".into(),
+                rule: "unknown_tool".into(),
             };
         }
 
@@ -101,6 +109,17 @@ impl PolicyEngine {
 
         decision
     }
+}
+
+fn known_read_tool(tool: &str) -> bool {
+    matches!(
+        tool,
+        "read_more_lines"
+            | "search_pattern"
+            | "get_device_metadata"
+            | "analyze_binary_structure"
+            | "probe_baud_rate"
+    )
 }
 
 impl Default for PolicyEngine {
@@ -184,12 +203,19 @@ mod tests {
     }
 
     #[test]
-    fn invalid_policy_denies_writes() {
+    fn invalid_policy_denies_writes_and_allows_known_reads() {
         let mut engine = PolicyEngine::fail_closed();
         assert_eq!(
             engine.evaluate("send_bytes", &[0x01], 0),
             Decision::Deny {
                 rule: "policy_invalid".into()
+            }
+        );
+        assert_eq!(engine.evaluate("read_more_lines", &[], 0), Decision::Allow);
+        assert_eq!(
+            engine.evaluate("not_a_tool", &[], 0),
+            Decision::Deny {
+                rule: "unknown_tool".into()
             }
         );
     }

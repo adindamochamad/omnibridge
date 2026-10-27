@@ -1,7 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { invoke } from '@tauri-apps/api/core';
-import { getApiKey } from './settings.js';
+import { applyCommitGate } from './commit-gate.js';
 import { AGENT_TOOLS, executeTool, type ToolContext } from './agent-tools.js';
+import {
+  getMetaModelClient,
+  META_MODEL_SPARK,
+  MUSE_SPARK_PRICING_USD_PER_MTOK,
+  resetMetaModelClient,
+} from './meta-api.js';
+import { getApiKey } from './settings.js';
 import type { DataLine, DiscoveredDevice } from './types.js';
 
 export interface AnalysisField {
@@ -48,6 +55,13 @@ export interface ProtocolAnalysis {
   fields: AnalysisField[];
   notes: string;
   command_presets?: CommandPreset[];
+  /** Names the gate refused to install. Not sent to the device. */
+  withheld_presets?: CommandPreset[];
+  /** Set by commit gate — parser/dashboard only apply when true (verified lane). */
+  committed?: boolean;
+  commit_reason?: string;
+  gate_mode?: 'naive' | 'verified';
+  evidence_summary?: string;
 }
 
 const SYSTEM_PROMPT = `You are Protocol Detective, an expert serial communication protocol analyzer embedded in OmniBridge — an intelligent serial gateway for legacy hardware.
@@ -130,6 +144,7 @@ Examples by protocol:
 - NMEA GPS: Set 1Hz rate ($PMTK220,1000), Enable GGA only ($PMTK314,...)
 - Modbus RTU: Read holding register (01 03 ...), Write single register (01 06 ...)
 - Arduino/custom: Include "help" or known query if observable in stream
+If you name Modbus RTU, include at least one command_presets entry. The app withholds it when the CRC check fails.
 Omit command_presets if protocol is unknown or you're not confident about the commands.
 
 Rules:
@@ -138,20 +153,12 @@ Rules:
 - Never output anything outside the JSON object
 - If data looks like multiple packet types, analyze the dominant pattern`;
 
-let _client: Anthropic | null = null;
-let _clientKey = '';
-
 function getClient(apiKey: string): Anthropic {
-  if (!_client || _clientKey !== apiKey) {
-    _client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    _clientKey = apiKey;
-  }
-  return _client;
+  return getMetaModelClient(apiKey);
 }
 
 export function resetClient() {
-  _client = null;
-  _clientKey = '';
+  resetMetaModelClient();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -186,7 +193,7 @@ export async function askAboutBuffer(
   onChunk?: (chunk: string) => void
 ): Promise<string> {
   const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API key not configured. Open Settings to add one.');
+  if (!apiKey) throw new Error('No Meta Model API key. Open Settings and paste a Standard key from dev.meta.ai. It starts with LLM_.');
 
   const client = getClient(apiKey);
 
@@ -224,7 +231,7 @@ USER QUESTION: ${ctx.question}`;
   messages.push({ role: 'user', content: userContent });
 
   const stream = client.messages.stream({
-    model: 'claude-opus-4-7',
+    model: META_MODEL_SPARK,
     max_tokens: 1024,
     thinking: { type: 'adaptive' },
     system: [
@@ -260,21 +267,21 @@ USER QUESTION: ${ctx.question}`;
  *  come through as strings or Error instances. Judges/users shouldn't have
  *  to parse a 400-char stack trace to understand "wrong API key". */
 export function friendlyError(e: unknown): string {
-  const anyE = e as { status?: number; error?: { message?: string }; message?: string };
+  const anyE = e as { status?: number; error?: { message?: string; type?: string; code?: string }; message?: string };
   const status = anyE?.status;
   const msg = anyE?.error?.message ?? anyE?.message ?? String(e);
 
   if (status === 401 || /invalid.*api.*key|authentication|unauthorized/i.test(msg)) {
-    return 'API key rejected. Open Settings and paste a valid Anthropic key.';
+    return 'Meta Model API key rejected. Open Settings and paste a valid key from dev.meta.ai.';
   }
   if (status === 429 || /rate.?limit/i.test(msg)) {
-    return 'Anthropic rate limit hit. Wait ~30 seconds and retry.';
+    return 'Meta Model API rate limit hit. Wait ~30 seconds and retry.';
   }
   if (status === 529 || /overloaded/i.test(msg)) {
-    return 'Anthropic API is overloaded right now. Retry in a moment.';
+    return 'Meta Model API is overloaded right now. Retry in a moment.';
   }
   if (status && status >= 500) {
-    return `Anthropic server error (${status}). Retry in a moment.`;
+    return `Meta Model API server error (${status}). Retry in a moment.`;
   }
   if (/network|fetch failed|ENOTFOUND|ECONNREFUSED/i.test(msg)) {
     return 'Network issue — check your connection, then retry.';
@@ -289,10 +296,11 @@ export function friendlyError(e: unknown): string {
 export async function analyzeStream(
   hexSamples: string[],
   asciiSamples: string[],
-  deviceClass?: string
+  deviceClass?: string,
+  linesForGate?: DataLine[]
 ): Promise<ProtocolAnalysis> {
   const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API key not configured. Set it in Settings.');
+  if (!apiKey) throw new Error('No Meta Model API key. Open Settings and paste a Standard key from dev.meta.ai. It starts with LLM_.');
 
   const client = getClient(apiKey);
 
@@ -311,7 +319,7 @@ ${asciiPreview}
 Identify the protocol and extract all structured data fields.`;
 
   const stream = client.messages.stream({
-    model: 'claude-opus-4-7',
+    model: META_MODEL_SPARK,
     max_tokens: 8192,
     thinking: { type: 'adaptive' },
     system: [
@@ -336,7 +344,7 @@ Identify the protocol and extract all structured data fields.`;
 
   const textBlock = response.content.find((b) => b.type === 'text');
   if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text response from Claude (possibly thinking-only output)');
+    throw new Error('No text response from Muse Spark (possibly thinking-only output)');
   }
 
   // Robust JSON extraction — handles markdown fences, prose wrapping, or plain JSON
@@ -349,9 +357,19 @@ Identify the protocol and extract all structured data fields.`;
   const jsonSlice = text.slice(firstBrace, lastBrace + 1);
 
   try {
-    return JSON.parse(jsonSlice) as ProtocolAnalysis;
+    const parsed = JSON.parse(jsonSlice) as ProtocolAnalysis;
+    const gateLines =
+      linesForGate ??
+      hexSamples.map((hex, i) => ({
+        id: i + 1,
+        timestamp: Date.now(),
+        hex,
+        ascii: asciiSamples[i] ?? '',
+        bytes: hex.split(/\s+/).filter(Boolean).length,
+      }));
+    return applyCommitGate(parsed, gateLines, null, 'naive').analysis;
   } catch (e) {
-    throw new Error(`Claude returned malformed JSON: ${(e as Error).message}. First 200 chars: ${jsonSlice.slice(0, 200)}`);
+    throw new Error(`Model returned malformed JSON: ${(e as Error).message}. First 200 chars: ${jsonSlice.slice(0, 200)}`);
   }
 }
 
@@ -382,8 +400,8 @@ These announce themselves in the initial sample. 1-2 tool calls is enough:
 ### Path B: Binary / unknown / low-ASCII streams
 These require real investigation — spend 3-5 tool calls to be confident:
 1. **Start with analyze_binary_structure** — it immediately reveals frame length, CRC match, framing bytes
-2. If analyze_binary_structure returns a Modbus CRC match, you're done — identify as Modbus RTU and describe register layout from sample_frames_hex
-3. If no CRC match, use read_more_lines with a large count (60-100) to see more frames, then re-analyze
+2. If the frames look like Modbus (for example 01 03), identify as Modbus RTU even when modbus_crc_check.validity_ratio is below 0.9. Include command_presets. The commit gate withholds them.
+3. If no CRC match, use read_more_lines with a large count (60-100) to see more frames, then re-analyze. Do not drop command_presets because the CRC failed.
 4. Call get_device_metadata to strengthen the hardware hypothesis
 5. Only probe_baud_rate if printable_ratio is extremely low (<0.2) AND no repeating structure found
 6. Emit final JSON with confidence proportional to evidence gathered
@@ -400,7 +418,10 @@ These require real investigation — spend 3-5 tool calls to be confident:
 - Concise field descriptions (<50 chars each)
 
 ## Interleaved reasoning:
-You are Claude Opus 4.7 with adaptive thinking. Think between tool calls — let your thinking block capture the hypothesis you're testing and what outcome would falsify it. The user sees your thinking; make it worth reading.
+You are Muse Spark on the Meta Model API. Think between tool calls — capture the hypothesis you are testing and what outcome would falsify it.
+
+## Commit gate (verified lane):
+OmniBridge will NOT install a parser until framing evidence matches your hypothesis. For binary streams you MUST call analyze_binary_structure before final JSON. For ASCII, verify with search_pattern when unsure. If modbus_crc_check.validity_ratio is below 0.9, still name Modbus RTU when the frames look like Modbus, keep your confidence in that identification, and say in notes that CRC validity failed. command_presets is still required. The app withholds the parser and the commands. Do not omit them and do not lower confidence just because the CRC failed.
 
 ## Final output (after investigation is complete):
 Output a JSON object as plain text (NO markdown fences, NO prose before/after JSON, NO tool calls):
@@ -408,6 +429,8 @@ Output a JSON object as plain text (NO markdown fences, NO prose before/after JS
 {
   "protocol": "Protocol name (e.g. 'NMEA 0183', 'CAS Scale', 'Modbus RTU')",
   "confidence": 85,
+  "committed": true,
+  "commit_reason": "One sentence citing the tool evidence that justified the parser",
   "device_hint": "Specific device type guess",
   "fields": [
     {
@@ -419,6 +442,9 @@ Output a JSON object as plain text (NO markdown fences, NO prose before/after JS
       "capture_group": 1,
       "data_type": "number"
     }
+  ],
+  "command_presets": [
+    { "name": "Read holding registers", "description": "Read holding registers", "hex": "01 03 00 00 00 0A" }
   ],
   "notes": "Brief summary: what you investigated, key findings, any caveats (mention tools you used)"
 }
@@ -441,13 +467,12 @@ Output a JSON object as plain text (NO markdown fences, NO prose before/after JS
   { "regex": "^01 03 14 ([0-9A-F]{2} [0-9A-F]{2})", "match_hex": true, "capture_group": 1, "data_type": "hex_u16_be", "unit": "°C·10" }
 - You MUST emit these fields for binary protocols — a live dashboard depends on it. Use analyze_binary_structure's sample_frames_hex output to figure out byte offsets.
 
-## Command presets (optional, encouraged for known protocols):
-Include a "command_presets" array with 2-5 useful commands user can send:
+## Command presets:
+When the protocol is known, include a "command_presets" array with 2-5 commands. Modbus RTU requires at least one named entry even when CRC validity is below 0.9. Omit the array only when the protocol is unknown.
   "command_presets": [
-    { "name": "Tare", "description": "Zero the scale", "hex": "1B 54 0D 0A" },
-    { "name": "Query", "description": "Request weight", "ascii": "W\\\\r\\\\n" }
+    { "name": "Read holding registers", "description": "Read holding registers", "hex": "01 03 00 00 00 0A" },
+    { "name": "Write single register", "description": "Write one holding register", "hex": "01 06 00 00 00 01" }
   ]
-Omit if protocol unknown or commands unclear.
 
 ## Confidence calibration:
 - 90-100: Verified via search_pattern + metadata
@@ -474,16 +499,8 @@ export interface AgentStep {
   error?: string;
 }
 
-/** Aggregate token usage + estimated cost across the full agent loop.
- *  Pricing is approximate — consult anthropic.com/pricing for authoritative rates.
- *  These constants match public Opus-tier pricing as of early 2026 and are used
- *  only for the cost indicator shown to the user, not for billing. */
-const PRICING_USD_PER_MTOK = {
-  input: 15.0,
-  output: 75.0,
-  cache_write: 18.75,
-  cache_read: 1.5,
-};
+/** Aggregate token usage + estimated cost (Muse Spark Standard — UI estimate only). */
+const PRICING_USD_PER_MTOK = MUSE_SPARK_PRICING_USD_PER_MTOK;
 
 export interface UsageStats {
   input_tokens: number;
@@ -539,6 +556,8 @@ export interface AgentContext {
   lines: DataLine[];
   device: DiscoveredDevice | null;
   deviceClass?: string;
+  /** Hackathon compare: refuse send_bytes and baud probes before any approval dialog. */
+  denyTransmit?: boolean;
 }
 
 const MAX_AGENT_STEPS = 8;
@@ -552,7 +571,7 @@ export async function analyzeWithAgent(
     return {
       trace: [],
       analysis: null,
-      error: 'API key not configured. Open Settings to add one.',
+      error: 'No Meta Model API key. Open Settings and paste a Standard key from dev.meta.ai. It starts with LLM_.',
       stopped_at: 'error',
       total_api_calls: 0,
       usage: emptyUsage(),
@@ -593,7 +612,11 @@ ${hexSample}
 ASCII:
 ${asciiSample}
 
-Use your tools to investigate as needed. Begin investigation now.`;
+Use your tools to investigate as needed. Begin investigation now.${
+    ctx.denyTransmit
+      ? ' This run must not transmit. If the frames look like Modbus, name Modbus RTU and include command_presets with at least one name even when CRC validity is below 0.9. The app withholds those commands.'
+      : ''
+  }`;
 
   // Use looser typing for message accumulator — SDK uses ContentBlock vs ContentBlockParam
   // which are structurally compatible but TS strict mode complains on round-tripping.
@@ -605,6 +628,7 @@ Use your tools to investigate as needed. Begin investigation now.`;
     port: ctx.port,
     lines: ctx.lines,
     device: ctx.device,
+    denyTransmit: ctx.denyTransmit,
   };
 
   for (let step = 0; step < MAX_AGENT_STEPS; step++) {
@@ -613,7 +637,7 @@ Use your tools to investigate as needed. Begin investigation now.`;
     let response: Anthropic.Messages.Message;
     try {
       const stream = client.messages.stream({
-        model: 'claude-opus-4-7',
+        model: META_MODEL_SPARK,
         max_tokens: 8192,
         thinking: { type: 'adaptive' },
         system: [
@@ -735,17 +759,19 @@ Use your tools to investigate as needed. Begin investigation now.`;
       }
 
       try {
-        const analysis = JSON.parse(
-          text.slice(firstBrace, lastBrace + 1)
-        ) as ProtocolAnalysis;
+        const raw = JSON.parse(text.slice(firstBrace, lastBrace + 1)) as ProtocolAnalysis;
+        const gated = applyCommitGate(raw, ctx.lines, trace, 'verified');
+        const analysis = gated.analysis;
         emit({
           type: 'final',
-          text: `${analysis.protocol} · ${analysis.confidence}%`,
+          text: gated.committed
+            ? `${analysis.protocol} · ${analysis.confidence}% · committed`
+            : `Held — ${gated.commit_reason.slice(0, 120)}`,
         });
         return {
           trace,
           analysis,
-          error: null,
+          error: gated.committed ? null : gated.commit_reason,
           stopped_at: 'end_turn',
           total_api_calls: apiCalls,
           usage,

@@ -62,6 +62,11 @@ impl ApprovalStore {
     pub fn cancel(&mut self, id: &str) {
         self.pending.remove(id);
     }
+
+    #[cfg(test)]
+    pub fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
