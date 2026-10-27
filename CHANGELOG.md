@@ -21,8 +21,13 @@ Judge-facing commit gate.
 
 ### Changed
 - App subtitle names the commit gate and Muse Spark, not the old CAS-only branding
-- Commit gate page shows the hackathon caption and a live PLC faceplate decoded from the Modbus frame
+- Commit gate page shows the hackathon caption and a PLC faceplate that stays blank until the verified lane commits on a CRC of at least 0.90
 - On-screen analysis, investigation, and chat copy names Muse Spark instead of Claude or Opus
+- Compare page does not send a device-class hint. Clearing **Break CRC** after a hold runs both lanes again on intact frames
+- One-shot prompt requires a named command when the protocol is identified, including when the CRC looks wrong
+
+### Fixed
+- Verified gate holds a binary parser when tool CRC validity is below 0.90, including when the model title avoids the word Modbus and a field regex matches the buffer
 
 ## [0.3.0] — 2026-10-27
 

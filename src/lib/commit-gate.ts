@@ -198,17 +198,24 @@ export function applyCommitGate<T extends GateProtocolAnalysis>(
   let committed = true;
 
   if (binary) {
-    const crcOk =
-      evidence.modbusValidityRatio !== null && evidence.modbusValidityRatio >= 0.9;
+    const ratio = evidence.modbusValidityRatio;
+    const crcMeasured = typeof ratio === 'number';
+    const crcOk = crcMeasured && ratio >= 0.9;
     const structureRan = evidence.binaryStructureCalls > 0;
+    const modbusClaim = claimsModbusHypothesis(analysis);
     if (!structureRan) {
       committed = false;
       reasons.push('Binary stream: analyze_binary_structure was not run before commit.');
-    } else if (claimsModbusHypothesis(analysis) && !crcOk) {
+    } else if (crcMeasured && !crcOk) {
       committed = false;
       reasons.push(
-        `Modbus hypothesis: CRC validity ${evidence.modbusValidityRatio ?? 0} (need ≥ 0.9).`
+        modbusClaim
+          ? `Modbus hypothesis: CRC validity ${ratio} (need ≥ 0.9).`
+          : `CRC validity ${ratio} (need ≥ 0.9). A matching field regex cannot install the parser.`
       );
+    } else if (modbusClaim && !crcOk) {
+      committed = false;
+      reasons.push(`Modbus hypothesis: CRC validity ${ratio ?? 0} (need ≥ 0.9).`);
     } else if (!crcOk && !regexCheck.pass) {
       committed = false;
       reasons.push('Binary stream: neither Modbus CRC nor field regex checks passed.');

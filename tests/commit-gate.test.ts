@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommitGate, verifyFieldRegexes } from '../src/lib/commit-gate.js';
-import { breakTrailingCrc, bufferModbusCrcRatio, buildDemoBufferLines, readModbusMachine } from '../src/lib/commit-gate-demo.js';
+import {
+  breakTrailingCrc,
+  bufferModbusCrcRatio,
+  buildDemoBufferLines,
+  faceplateValuesVisible,
+  readModbusMachine,
+  shouldProveGateOpens,
+} from '../src/lib/commit-gate-demo.js';
 import type { DataLine } from '../src/lib/types.js';
 
 function line(ascii: string, id = 1): DataLine {
@@ -144,7 +151,45 @@ describe('commit gate', () => {
     ]);
   });
 
-  it('verified lane still commits a non-Modbus binary parser when its regex matches', () => {
+  it('verified lane holds a binary parser when CRC validity is below 0.9 even if the title is not Modbus', () => {
+    const hexLine = {
+      id: 1,
+      timestamp: Date.now(),
+      hex: '05 64 AA BB CC',
+      ascii: '·····',
+      bytes: 5,
+    };
+    const out = applyCommitGate(
+      {
+        protocol: 'Vendor frame',
+        confidence: 91,
+        device_hint: 'controller',
+        fields: [{ name: 'byte0', regex: '^([0-9A-F]{2})', match_hex: true, capture_group: 1 }],
+        notes: '',
+        command_presets: [{ name: 'Force coil', hex: '01 05 00 00 FF 00' }],
+      },
+      [hexLine],
+      [
+        {
+          type: 'tool_result',
+          tool_name: 'analyze_binary_structure',
+          tool_output: JSON.stringify({
+            modbus_crc_check: { validity_ratio: 0, frames_tested: 8 },
+          }),
+        },
+      ],
+      'verified'
+    );
+    expect(out.committed).toBe(false);
+    expect(out.analysis.fields).toHaveLength(0);
+    expect(out.analysis.command_presets).toEqual([]);
+    expect(out.analysis.withheld_presets).toEqual([
+      { name: 'Force coil', hex: '01 05 00 00 FF 00' },
+    ]);
+    expect(out.commit_reason).toContain('need ≥ 0.9');
+  });
+
+  it('verified lane commits a non-Modbus binary parser when CRC was not measured and the regex matches', () => {
     const hexLine = {
       id: 1,
       timestamp: Date.now(),
@@ -172,9 +217,7 @@ describe('commit gate', () => {
         {
           type: 'tool_result',
           tool_name: 'analyze_binary_structure',
-          tool_output: JSON.stringify({
-            modbus_crc_check: { validity_ratio: 0.1, frames_tested: 8 },
-          }),
+          tool_output: JSON.stringify({ frame_analysis: { likely_frame_length: 5 } }),
         },
       ],
       'verified'
@@ -251,6 +294,43 @@ describe('commit gate', () => {
         : '·'))
       .join('');
     expect(flipped.ascii).toBe(fromHex);
+  });
+
+  it('shows PLC values only after the verified lane commits on a strong CRC', () => {
+    expect(faceplateValuesVisible({ verifiedCommitted: false, crcRatio: 0 })).toBe(false);
+    expect(faceplateValuesVisible({ verifiedCommitted: null, crcRatio: 1 })).toBe(false);
+    expect(faceplateValuesVisible({ verifiedCommitted: true, crcRatio: 0 })).toBe(false);
+    expect(faceplateValuesVisible({ verifiedCommitted: true, crcRatio: 1 })).toBe(true);
+  });
+
+  it('re-runs the compare only when Break CRC is cleared after a hold', () => {
+    expect(
+      shouldProveGateOpens({
+        previousBreakCrc: true,
+        nextBreakCrc: false,
+        scenario: 'modbus-plc',
+        verifiedCommitted: false,
+        running: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldProveGateOpens({
+        previousBreakCrc: true,
+        nextBreakCrc: false,
+        scenario: 'modbus-plc',
+        verifiedCommitted: true,
+        running: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldProveGateOpens({
+        previousBreakCrc: false,
+        nextBreakCrc: true,
+        scenario: 'modbus-plc',
+        verifiedCommitted: false,
+        running: false,
+      })
+    ).toBe(false);
   });
 
   it('reads the same machine values when only the CRC bytes are flipped', () => {

@@ -24,13 +24,13 @@ Jangan submit selama salah satu ini benar.
 ## 1. Dampak — yang terlihat di satu frame
 
 - [ ] Desktop window, `/hackathon`, Break CRC nyala, readout **CRC 0.00**, need **0.90**, meta `CRC flipped`.
-- [ ] Pita byte terlihat sebelum tombol ditekan. Kalimat di layar: *Do not install a parser the bytes cannot prove.*
+- [ ] Pita byte terlihat sebelum tombol ditekan. Faceplate Temp, Pressure, Flow, Motor, Valve, Alarm masih **—**. Kalimat di layar: *Do not install a parser the bytes cannot prove.*
 - [ ] Setelah **Run both lanes**, baris Decision: Naive = **Installed**, Verified = **Held**.
 - [ ] Baris Confidence menunjukkan angka model di kedua kolom. Angka verified boleh tinggi. Keputusan tetap Held.
 - [ ] Baris Tool CRC verified adalah angka di bawah 0.90, dan baris Tools memuat `analyze_binary_structure`.
 - [ ] Baris Fields verified = `0`. Baris Commands naive menyebut nama perintah. Baris Commands verified = `withheld`.
 - [ ] Take yang Commands-nya `none returned` dibuang. Jalankan ulang sampai kontras perintah ada.
-- [ ] Break CRC dimatikan di take yang sama. Readout pindah ke **1.00** sebelum kartu akhir. Ini bukti gate bisa membuka, tanpa fitur kedua.
+- [ ] Break CRC dimatikan setelah Held, dalam take yang sama. Halaman menjalankan kedua lajur lagi. Readout **1.00**, Verified menjadi **Committed**, lalu angka faceplate terisi.
 
 ## 2. Model Meta — mesin, bukan stiker
 
@@ -49,7 +49,7 @@ Ikuti [HACKATHON_DEMO_SCRIPT.md](./HACKATHON_DEMO_SCRIPT.md).
 - [ ] Satu take desktop. Tidak ada zoom ke kode, tidak ada tur sidebar.
 - [ ] Kartu akhir: `https://github.com/adindamochamad/omnibridge`, path `/hackathon`, dan kalimat *Best Agentic Use-Case*.
 - [ ] Audio menyebut shell dan enam tool sebagai yang sudah ada. Yang baru: klien Muse Spark dan commit gate.
-- [ ] Dua gladi bersih di jendela Tauri sebelum rekam. Gladi pertama Break CRC nyala sampai Held. Gladi kedua Break CRC mati sampai readout 1.00.
+- [ ] Dua gladi bersih di jendela Tauri sebelum rekam. Gladi pertama Break CRC nyala sampai Held dan faceplate tetap **—**. Gladi kedua melepas Break CRC sampai Verified **Committed** dan faceplate terisi.
 
 ## 4. Kedalaman teknis — bisa diulang orang lain
 
@@ -77,5 +77,5 @@ Checkpoint 27 Okt 2026 malam: [HACKATHON_CHECKPOINT.md](./HACKATHON_CHECKPOINT.m
 
 1. Di jendela yang baru dimuat, **Run both lanes** sekali lagi. Tabelnya kosong setelah reload.
 2. Simpan take hanya jika Naive menyebut perintah dan Verified menulis `withheld`.
-3. Lepas Break CRC di akhir take sampai readout **1.00**.
+3. Lepas Break CRC di akhir take. Tunggu Verified **Committed** dan faceplate terisi. Readout saat itu **1.00**.
 4. Rekam 2:45–3:00. Submit Cerebral Valley sebelum 4 Nov 2026, 21:00 ET (5 Nov 2026, 09:00 WIB).

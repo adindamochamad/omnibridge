@@ -26,11 +26,11 @@ Same sheet, same bytes. The Tools row must show `analyze_binary_structure`. Tool
 
 > The commit gate is code. The model can be sure. If the CRC is weak, fields stay empty and commands are withheld.
 
-Leave **Held** on screen. That is the product. If Commands says `none returned` on the naive side, that take is not the one you submit — run again until the naive cell names a command and the verified cell says `withheld`.
+Leave **Held** on screen. The faceplate stays at **—** while CRC is **0.00**. That is the product. If Commands says `none returned` on the naive side, or the page says to retake, that take is not the one you submit — run again until the naive cell names a command and the verified cell says `withheld`.
 
 ## 2:20–2:40 — The gate can open
 
-Uncheck **Break CRC**. Do not narrate a second feature. The readout moving from **0.00** to **1.00** is the proof this is a gate, not a permanent block.
+Uncheck **Break CRC**. The page rebuilds an intact buffer and runs both lanes again. The readout moves from **0.00** to **1.00**. Wait until Verified says **Committed** and the faceplate fills in Temp, Pressure, Flow, Motor, Valve, and Alarm. That is the proof this is a gate, not a permanent block.
 
 ## 2:40–3:00 — Close
 

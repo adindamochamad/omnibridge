@@ -76,6 +76,31 @@ export function readModbusMachine(hex: string): ModbusMachineReading | null {
   };
 }
 
+/** PLC numbers appear only after the verified lane commits on a strong CRC. */
+export function faceplateValuesVisible(input: {
+  verifiedCommitted: boolean | null | undefined;
+  crcRatio: number | null;
+}): boolean {
+  return input.verifiedCommitted === true && input.crcRatio !== null && input.crcRatio >= 0.9;
+}
+
+/** After a hold, clearing Break CRC re-runs both lanes on the intact buffer. */
+export function shouldProveGateOpens(input: {
+  previousBreakCrc: boolean;
+  nextBreakCrc: boolean;
+  scenario: 'cas-scale' | 'modbus-plc';
+  verifiedCommitted: boolean | null | undefined;
+  running: boolean;
+}): boolean {
+  return (
+    input.previousBreakCrc &&
+    !input.nextBreakCrc &&
+    input.scenario === 'modbus-plc' &&
+    input.verifiedCommitted === false &&
+    !input.running
+  );
+}
+
 /** Build buffer lines from a built-in device scenario. */
 export function buildDemoBufferLines(
   scenarioId: 'cas-scale' | 'modbus-plc',

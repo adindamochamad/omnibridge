@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { bufferModbusCrcRatio, buildDemoBufferLines, readModbusMachine } from '$lib/commit-gate-demo.js';
+  import {
+    bufferModbusCrcRatio,
+    buildDemoBufferLines,
+    faceplateValuesVisible,
+    readModbusMachine,
+    shouldProveGateOpens,
+  } from '$lib/commit-gate-demo.js';
   import { collectToolEvidence } from '$lib/commit-gate.js';
   import {
     analyzeStream,
@@ -13,6 +19,9 @@
   import type { DataLine } from '$lib/types.js';
 
   type ScenarioId = 'cas-scale' | 'modbus-plc';
+
+  const NAMED_COMMAND_REQUIRED =
+    'If you identify a protocol, include command_presets with at least one non-empty name. A failing CRC is not a reason to omit the name.';
 
   let scenario = $state<ScenarioId>('modbus-plc');
   let breakCrc = $state(true);
@@ -29,7 +38,7 @@
     return (result?.command_presets ?? []).map((preset) => preset.name).filter(Boolean);
   }
 
-  function refreshBuffer() {
+  function replaceBuffer() {
     runGeneration += 1;
     running = false;
     lines = buildDemoBufferLines(scenario, scenario === 'modbus-plc' ? 30 : 20, {
@@ -42,11 +51,23 @@
     agentTrace = [];
   }
 
-  $effect(() => {
-    scenario;
-    breakCrc;
-    refreshBuffer();
-  });
+  function selectScenario(next: ScenarioId) {
+    scenario = next;
+    replaceBuffer();
+  }
+
+  function onBreakCrc(next: boolean) {
+    const prove = shouldProveGateOpens({
+      previousBreakCrc: breakCrc,
+      nextBreakCrc: next,
+      scenario,
+      verifiedCommitted: verifiedResult?.committed,
+      running,
+    });
+    breakCrc = next;
+    replaceBuffer();
+    if (prove) void runCompare();
+  }
 
   function pushLiveFrame() {
     if (running || naiveResult || verifiedResult || lines.length === 0) return;
@@ -58,6 +79,7 @@
   }
 
   onMount(() => {
+    replaceBuffer();
     const timer = setInterval(pushLiveFrame, 900);
     return () => clearInterval(timer);
   });
@@ -75,9 +97,8 @@
 
     const hex = sample.map((l) => l.hex);
     const ascii = sample.map((l) => l.ascii);
-    const deviceClass = scenario === 'modbus-plc' ? 'modbus_plc_demo' : 'weighing_scale_demo';
 
-    const naivePromise = analyzeStream(hex, ascii, deviceClass, sample).then(
+    const naivePromise = analyzeStream(hex, ascii, undefined, sample, NAMED_COMMAND_REQUIRED).then(
       (r) => {
         if (generation === runGeneration) naiveResult = r;
       },
@@ -91,7 +112,6 @@
         port: `demo://${scenario}`,
         lines: sample,
         device: null,
-        deviceClass,
         denyTransmit: true,
       },
       (step) => {
@@ -119,6 +139,19 @@
   const machine = $derived(
     scenario === 'modbus-plc' && lines.length > 0 ? readModbusMachine(lines[lines.length - 1].hex) : null
   );
+  const valuesVisible = $derived(
+    faceplateValuesVisible({
+      verifiedCommitted: verifiedResult?.committed,
+      crcRatio: bufferCrc?.ratio ?? null,
+    })
+  );
+  const shownMachine = $derived(valuesVisible ? machine : null);
+
+  function withheldNames(result: ProtocolAnalysis | null): string[] {
+    return (result?.withheld_presets ?? [])
+      .map((preset) => preset.name)
+      .filter((name): name is string => Boolean(name));
+  }
 </script>
 
 <svelte:head>
@@ -162,27 +195,35 @@
     <div class="toolbar">
       <label>
         Stream
-        <select bind:value={scenario}>
+        <select
+          value={scenario}
+          onchange={(e) => selectScenario((e.currentTarget as HTMLSelectElement).value as ScenarioId)}
+        >
           <option value="modbus-plc">Modbus RTU PLC</option>
           <option value="cas-scale">CAS weighing scale</option>
         </select>
       </label>
       <label class="check">
-        <input type="checkbox" bind:checked={breakCrc} disabled={scenario !== 'modbus-plc'} />
+        <input
+          type="checkbox"
+          checked={breakCrc}
+          disabled={scenario !== 'modbus-plc' || running}
+          onchange={(e) => onBreakCrc((e.currentTarget as HTMLInputElement).checked)}
+        />
         Break CRC
       </label>
       <button type="button" onclick={runCompare} disabled={running}>
         {running ? 'Muse Spark running…' : 'Run both lanes'}
       </button>
     </div>
-    {#if machine}
-      <div class="machine" aria-label="PLC faceplate">
-        <span><b>Temp</b> {machine.temperatureC.toFixed(1)} °C</span>
-        <span><b>Pressure</b> {machine.pressureHpa} hPa</span>
-        <span><b>Flow</b> {machine.flowLMin} L/min</span>
-        <span><b>Motor</b> {machine.motorRpm} rpm</span>
-        <span><b>Valve</b> {machine.valvePercent}%</span>
-        <span><b>Alarm</b> {machine.alarm === 0 ? 'clear' : machine.alarm}</span>
+    {#if scenario === 'modbus-plc'}
+      <div class="machine" class:withheld={!shownMachine} aria-label="PLC faceplate">
+        <span><b>Temp</b> {shownMachine ? `${shownMachine.temperatureC.toFixed(1)} °C` : '—'}</span>
+        <span><b>Pressure</b> {shownMachine ? `${shownMachine.pressureHpa} hPa` : '—'}</span>
+        <span><b>Flow</b> {shownMachine ? `${shownMachine.flowLMin} L/min` : '—'}</span>
+        <span><b>Motor</b> {shownMachine ? `${shownMachine.motorRpm} rpm` : '—'}</span>
+        <span><b>Valve</b> {shownMachine ? `${shownMachine.valvePercent}%` : '—'}</span>
+        <span><b>Alarm</b> {shownMachine ? (shownMachine.alarm === 0 ? 'clear' : shownMachine.alarm) : '—'}</span>
       </div>
     {/if}
   </section>
@@ -275,6 +316,10 @@
       <span class="cell why">{verifiedError && !verifiedResult ? verifiedError : verifiedResult?.commit_reason ?? '—'}</span>
     </div>
   </section>
+
+  {#if !running && naiveResult && verifiedResult && (presetNames(naiveResult).length === 0 || (verifiedResult.committed === false && withheldNames(verifiedResult).length === 0))}
+    <p class="retake">Retake this run. A saved take needs a naive command name and a withheld command name.</p>
+  {/if}
 
   <div class="tape" aria-label="Buffer bytes">
     {#each lines as line (line.id)}
@@ -420,6 +465,14 @@
   .machine b {
     font-weight: 500;
     color: #7f8ba8;
+  }
+  .machine.withheld {
+    color: #6d7590;
+  }
+  .retake {
+    margin: 0.55rem 0 0;
+    color: #e0b15a;
+    font-size: 0.78rem;
   }
   label {
     display: flex;

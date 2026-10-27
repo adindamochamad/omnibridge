@@ -11,7 +11,7 @@ A confident, wrong protocol ID must not install a parser. `applyCommitGate` in `
 - **Naive lane** (`⬡ Analyze`): Muse Spark one-shot; parser installs without evidence (contrast).
 - **Verified lane** (`🔬 Investigate`): tool loop on `muse-spark-1.3`; parser and device profile are stored only when framing evidence agrees (Modbus CRC ≥ 0.9, or ASCII field regexes matching the buffer).
 
-Side-by-side page: `/hackathon`. Default stream is Modbus with CRC bytes flipped: naive still installs a parser; verified holds. Uncheck **Break CRC** to show a passing gate.
+Side-by-side page: `/hackathon`. Default stream is Modbus with CRC bytes flipped: naive still installs a parser; verified holds; the PLC faceplate stays blank. Uncheck **Break CRC** after a hold and the page runs again on intact frames. Verified commits, then the faceplate fills in. The compare request does not include a device-class hint.
 
 ## Claim $150 Meta Model API credits (you must do this)
 

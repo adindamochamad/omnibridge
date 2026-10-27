@@ -131,8 +131,8 @@ Rather than omitting regex, set "match_hex": true and write the regex against th
   - register 2 = bytes 7-8 → regex with TWO more "[0-9A-F]{2} [0-9A-F]{2}" before the capture, etc.
 - ALWAYS emit these fields for binary — a working dashboard requires them. Do NOT omit regex for binary protocols.
 
-## Command presets (optional but encouraged for known protocols):
-If you recognize the protocol, ALSO output a "command_presets" array with 2-5 common commands the user can send to the device:
+## Command presets:
+If you recognize the protocol, output a "command_presets" array with 2-5 common commands the user can send to the device:
 {
   "command_presets": [
     { "name": "Tare", "description": "Zero the scale reading", "hex": "1B 54 0D 0A" },
@@ -144,8 +144,7 @@ Examples by protocol:
 - NMEA GPS: Set 1Hz rate ($PMTK220,1000), Enable GGA only ($PMTK314,...)
 - Modbus RTU: Read holding register (01 03 ...), Write single register (01 06 ...)
 - Arduino/custom: Include "help" or known query if observable in stream
-If you name Modbus RTU, include at least one command_presets entry. The app withholds it when the CRC check fails.
-Omit command_presets if protocol is unknown or you're not confident about the commands.
+If you name a known protocol, include at least one command_presets entry with a non-empty name. Do this even when a checksum or CRC looks wrong. The verified lane withholds installation when CRC validity is below 0.9; the name is still required. Omit command_presets only when the protocol is unknown.
 
 Rules:
 - confidence is an integer 0–100
@@ -297,7 +296,8 @@ export async function analyzeStream(
   hexSamples: string[],
   asciiSamples: string[],
   deviceClass?: string,
-  linesForGate?: DataLine[]
+  linesForGate?: DataLine[],
+  extraInstruction?: string
 ): Promise<ProtocolAnalysis> {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('No Meta Model API key. Open Settings and paste a Standard key from dev.meta.ai. It starts with LLM_.');
@@ -316,7 +316,9 @@ ${hexPreview}
 ASCII representation:
 ${asciiPreview}
 
-Identify the protocol and extract all structured data fields.`;
+Identify the protocol and extract all structured data fields.${
+    extraInstruction ? `\n\n${extraInstruction}` : ''
+  }`;
 
   const stream = client.messages.stream({
     model: META_MODEL_SPARK,
