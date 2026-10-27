@@ -15,3 +15,9 @@ vite.config.ts.timestamp-*
 # Private working docs (video script, submission pitch) — kept local for
 # production + submission, not committed to public repo
 /private/
+
+# Local production packs. Not part of the judged tree.
+/Records/
+/pic/
+/releases/
+/Hackathon Built With Opus 4.7/

@@ -73,8 +73,9 @@ Tidak dikerjakan untuk submission ini.
 
 ## Urutan yang tersisa
 
-1. Kunci Standard lulus Test connection.
-2. Dua gladi di `npm run tauri dev` sampai Held dan `withheld` stabil.
-3. Rapikan README dan string Claude yang bisa masuk frame.
-4. Commit dan push ke `adindamochamad/omnibridge` sebelum kartu akhir direkam.
-5. Rekam 2:45–3:00. Submit Cerebral Valley sebelum 4 Nov 2026, 21:00 ET (5 Nov 2026, 09:00 WIB).
+Checkpoint 27 Okt 2026 malam: [HACKATHON_CHECKPOINT.md](./HACKATHON_CHECKPOINT.md). Repo publik `d567052` sudah memuat gate, caption, dan salinan Muse Spark. Claude/Opus di panel yang bisa terekam sudah diganti.
+
+1. Di jendela yang baru dimuat, **Run both lanes** sekali lagi. Tabelnya kosong setelah reload.
+2. Simpan take hanya jika Naive menyebut perintah dan Verified menulis `withheld`.
+3. Lepas Break CRC di akhir take sampai readout **1.00**.
+4. Rekam 2:45–3:00. Submit Cerebral Valley sebelum 4 Nov 2026, 21:00 ET (5 Nov 2026, 09:00 WIB).
