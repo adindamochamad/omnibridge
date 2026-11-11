@@ -1,7 +1,7 @@
 # OmniBridge Safe Mode — rencana implementasi
 
-Sumber spec: `/Users/mac/Development/omnibridge-safe-mode-prd-v2.md` (Draft v2, 8 Okt 2026).
-Repo: `/Users/mac/Development/OmniBridge` (GitHub `adindamochamad/omnibridge`).
+Sumber spec: draf lokal `omnibridge-safe-mode-prd-v2.md` (Draft v2, 8 Okt 2026). Berkas itu tidak ada di repositori ini.
+Repo: GitHub `adindamochamad/omnibridge`.
 Dokumen ini mengunci keputusan yang di v2 masih bolong. Kalau bentrok dengan contoh di PRD, ikuti dokumen ini.
 
 Cara pakai di sesi baru: buka repo ini, tempel prompt Start di bawah, kerjakan **satu milestone**, berhenti, tunjukkan diff dan hasil tes. Jangan loncat.
@@ -10,7 +10,7 @@ Cara pakai di sesi baru: buka repo ini, tempel prompt Start di bawah, kerjakan *
 
 ## Start (tempel sekali)
 
-Baca `/Users/mac/Development/omnibridge-safe-mode-prd-v2.md` bagian 2, 3, dan 8, lalu baca seluruh `docs/safemode/omnibridge-safe-mode-plan.md`. Ikuti bagian 8 PRD. Jangan tulis kode fitur dulu. Balas dengan ringkasan 5 baris dan pertanyaan. Kalau tidak ada pertanyaan, kerjakan hanya milestone yang saya sebut.
+Baca draf lokal `omnibridge-safe-mode-prd-v2.md` (tidak ada di repositori ini) bagian 2, 3, dan 8, lalu baca seluruh `docs/safemode/omnibridge-safe-mode-plan.md`. Ikuti bagian 8 PRD. Jangan tulis kode fitur dulu. Balas dengan ringkasan 5 baris dan pertanyaan. Kalau tidak ada pertanyaan, kerjakan hanya milestone yang saya sebut.
 
 ---
 
